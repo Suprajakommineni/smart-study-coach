@@ -1,7 +1,9 @@
-import { Body, Controller, Post, Param, Get } from '@nestjs/common';
+import { Body, Controller, Post, Param, Get, UseGuards } from '@nestjs/common';
 import { ModuleService } from './module.service.js';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('workspaces/:workspaceId/subjects/:subjectId/modules')
+@UseGuards(AuthGuard('jwt'))
 export class ModuleController {
     constructor( private moduleService: ModuleService) {}
 
