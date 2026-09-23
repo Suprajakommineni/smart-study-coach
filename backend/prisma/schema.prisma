@@ -63,7 +63,7 @@ model Concept {
     sourceId      Int
     sourceVersion Int
     title         String
-    definition     String       @db.Text
+    definition    String       @db.Text
     facts         String       @db.Text
     tags          String?
     status        String       @default("suggested")
