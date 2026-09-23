@@ -6,9 +6,10 @@ import { PrismaService } from './prisma/prisma.service.js';
 import { WorkspaceModule } from './workspace/workspace.module.js';
 import { SubjectModule } from './subject/subject.module.js';
 import { ModuleModule } from './module/module.module.js';
+import { SourceModule } from './source/source.module.js';
 
 @Module({
-  imports: [AuthModule, WorkspaceModule, SubjectModule, ModuleModule],
+  imports: [AuthModule, WorkspaceModule, SubjectModule, ModuleModule, SourceModule],
   controllers: [AppController],
   providers: [AppService, PrismaService],
 })

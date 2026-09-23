@@ -44,4 +44,34 @@ model Module {
     createdAt     DateTime     @default(now())
     updatedAt     DateTime     @updatedAt
     subject       Subject      @relation(fields: [subjectId], references: [id])
+    sources       Source[]
+}
+model Source {
+    id            Int          @id @default(autoincrement())
+    moduleId      Int
+    text          String       @db.Text
+    sourceType    String       @default("paste")
+    status        String       @default("draft")
+    version       Int          @default(1)
+    createdAt     DateTime     @default(now())
+    updatedAt     DateTime     @updatedAt
+    module        Module       @relation(fields: [moduleId], references: [id])
+    concepts      Concept[]
+}
+model Concept {
+    id            Int          @id @default(autoincrement())
+    sourceId      Int
+    sourceVersion Int
+    title         String
+    definition     String       @db.Text
+    facts         String       @db.Text
+    tags          String?
+    status        String       @default("suggested")
+    snippet       String?      @db.Text
+    aiRunId       String?
+    createdAt     DateTime     @default(now())
+    updatedAt     DateTime     @updatedAt
+
+    source        Source       @relation(fields: [sourceId], references: [id])
+            
 }
