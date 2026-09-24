@@ -45,6 +45,7 @@ model Module {
     updatedAt     DateTime     @updatedAt
     subject       Subject      @relation(fields: [subjectId], references: [id])
     sources       Source[]
+    studySessions StudySession[]
 }
 model Source {
     id            Int          @id @default(autoincrement())
@@ -73,5 +74,41 @@ model Concept {
     updatedAt     DateTime     @updatedAt
 
     source        Source       @relation(fields: [sourceId], references: [id])
-            
+    questions     Question[]
+}
+model Question {
+    id            Int           @id @default(autoincrement())
+    type          String
+    conceptId     Int
+    text          String        @db.Text
+    difficulty    Int
+    status        String        @default("generated")
+    answer        String        @db.Text
+    choices       String?       @db.Text
+    concept       Concept       @relation(fields:[conceptId], references: [id])
+    createdAt     DateTime      @default(now())
+    updatedAt     DateTime      @updatedAt
+    attempts      Attempt[]
+}
+model StudySession {
+    id            Int             @id @default(autoincrement())
+    moduleId      Int
+    module        Module           @relation(fields:[moduleId], references:[id])
+    questionCount Int
+    createdAt     DateTime         @default(now())
+    updatedAt     DateTime         @updatedAt
+    attempts      Attempt[]
+             
+}
+model Attempt {
+    id            Int            @id @default(autoincrement())
+    studySessionId Int
+    StudySessions  StudySession  @relation(fields:[studySessionId], references:[id])
+    questionId      Int
+    questions       Question      @relation(fields: [questionId], references: [id])
+    answer         String         @db.Text
+    result          String
+    timeTaken       Int?         
+    createdAt       DateTime      @default(now())
+    updatedAt       DateTime       @updatedAt
 }
