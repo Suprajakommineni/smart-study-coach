@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { registerUser } from "../../api/authapi";
+import { registerUser } from "../api/authapi";
 
 type FormError = {
   email: string,

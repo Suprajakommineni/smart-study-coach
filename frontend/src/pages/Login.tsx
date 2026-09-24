@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { loginUser } from "../../api/authapi";
+import { loginUser } from "../api/authapi";
 
 type FormError = {
   email: string,
@@ -31,8 +31,8 @@ export default function Login() {
         return;
       }
       const data = await loginUser(email, password);
-      localStorage.setItem("token", data.access_token);
-      window.location.href = "/dashboard";
+      localStorage.setItem("token", data.accessToken);
+      window.location.href = "/workspaces";
     } catch (err) {
       const message = err instanceof Error? err.message : "Something went wrong"
       setError({
