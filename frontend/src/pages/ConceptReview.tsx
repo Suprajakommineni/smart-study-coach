@@ -1,4 +1,4 @@
-import { getConcepts, acceptConcept, rejectConcept, editConcept } from "@/api/conceptapi";
+import { getConcepts, acceptConcept, rejectConcept, editConcept, mergeConcepts } from "@/api/conceptapi";
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
@@ -33,6 +33,8 @@ const ConceptReview = () => {
   const [editTitle, setEditTitle] = useState("");
   const [editDefinition, setEditDefinition] = useState("");
   const [editFacts, setEditFacts] = useState("");
+  const [mergeKeepId, setMergeKeepId] = useState<number | null>(null);
+const [mergeId, setMergeId] = useState<number | null>(null);
 
   const { sourceId } = useParams();
   const id = Number(sourceId);
@@ -77,6 +79,18 @@ const ConceptReview = () => {
     loadData();
   };
 
+  const handleMerge = async() => {
+    if(mergeKeepId === null || mergeId === null) return;
+    try{
+      await mergeConcepts(mergeKeepId, mergeId);
+      setMergeKeepId(null);
+      setMergeId(null);
+      await loadData()
+    } catch {
+      setError("Failed to merge concepts");
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6">Review Concepts</h1>
@@ -86,6 +100,67 @@ const ConceptReview = () => {
       {!loading && !error && concepts.length === 0 && (
         <p className="text-gray-500">No concepts yet — process a source to generate some.</p>
       )}
+
+      {mergeKeepId !== null && (
+  <div className="mb-6 rounded-lg border bg-white p-4">
+    <h2 className="font-semibold text-gray-900">
+      Select a concept to merge
+    </h2>
+
+    <p className="text-sm text-gray-500 mt-1">
+      The selected concept will be kept. Choose another concept to merge into it.
+    </p>
+
+    <div className="flex flex-wrap gap-2 mt-4">
+      {concepts
+        .filter((concept) => concept.id !== mergeKeepId)
+        .map((concept) => (
+          <Button
+            key={concept.id}
+            size="sm"
+            variant="outline"
+            onClick={() => setMergeId(concept.id)}
+          >
+            {concept.title}
+          </Button>
+        ))}
+    </div>
+
+    {mergeId !== null && (
+      <div className="mt-4 border-t pt-4">
+        <p className="text-sm">
+          <strong>Keep:</strong>{" "}
+          {concepts.find((c) => c.id === mergeKeepId)?.title}
+        </p>
+
+        <p className="text-sm">
+          <strong>Merge:</strong>{" "}
+          {concepts.find((c) => c.id === mergeId)?.title}
+        </p>
+
+        <div className="flex gap-2 mt-3">
+          <Button
+            size="sm"
+            onClick={handleMerge}
+          >
+            Confirm Merge
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setMergeKeepId(null);
+              setMergeId(null);
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    )}
+  </div>
+)}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {concepts.map((concept) => (
@@ -141,6 +216,7 @@ const ConceptReview = () => {
                   <Button size="sm" variant="default" onClick={() => handleAccept(concept.id)}>Accept</Button>
                   <Button size="sm" variant="outline" onClick={() => startEdit(concept)}>Edit</Button>
                   <Button size="sm" variant="destructive" onClick={() => handleReject(concept.id)}>Reject</Button>
+                  <Button size="sm" variant="secondary" onClick={() => {setMergeKeepId(concept.id); setMergeId(null);}}>Merge</Button>
                 </>
               )}
             </CardFooter>

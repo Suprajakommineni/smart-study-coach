@@ -14,14 +14,12 @@ import { MasteryModule } from './mastery/mastery.module.js';
 import { AuditLogModule } from './audit-log/audit-log.module.js';
 import { SearchService } from './search/search.service.js';
 import { SearchModule } from './search/search.module.js';
-import { DashboardService } from './dashboard/dashboard.service.js';
-import { DashboardController } from './dashboard/dashboard.controller.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 
 
 @Module({
   imports: [AuthModule, WorkspaceModule, SubjectModule, ModuleModule, SourceModule, ConceptModule, QuestionModule, StudySessionModule, MasteryModule, AuditLogModule, SearchModule, DashboardModule],
-  controllers: [AppController, DashboardController],
-  providers: [AppService, PrismaService, SearchService, DashboardService],
+  controllers: [AppController],
+  providers: [AppService, PrismaService, SearchService ],
 })
 export class AppModule {}
