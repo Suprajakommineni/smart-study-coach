@@ -1,4 +1,4 @@
-import { Controller, UseGuards, Post, Body, Param, Get } from '@nestjs/common';
+import { Controller, UseGuards, Post, Body, Param, Get, Patch, Request } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SourceService } from './source.service.js';
 
@@ -11,6 +11,18 @@ export class SourceController {
     async create(@Param('moduleId') moduleId: string, @Body('text') text: string ) {
         return this.sourceService.create(Number(moduleId), text)
     }
+    @Patch(':sourceId')
+async update(
+  @Param('sourceId') sourceId: string,
+  @Body('text') text: string,
+  @Request() req: any,
+) {
+  return this.sourceService.update(
+    Number(sourceId),
+    req.user.userId,
+    text,
+  );
+}
 
     @Get()
     async findAll(@Param('moduleId') moduleId: string) {

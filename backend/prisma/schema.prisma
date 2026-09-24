@@ -1,114 +1,229 @@
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
+
 datasource db {
-    provider = "mysql"
-    url      = env("DATABASE_URL")
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-    id            Int          @id @default(autoincrement())
-    email         String       @unique
-    password      String
-    createdAt     DateTime     @default(now())
-    workspaces    Workspace[]
+  id            Int            @id @default(autoincrement())
+  email         String         @unique
+  password      String
+  createdAt     DateTime       @default(now())
+  workspaces    Workspace[]
+  auditLogs     AuditLog[]
+  studySessions StudySession[]
 }
-model Workspace {
-    id            Int          @id @default(autoincrement())
-    name          String
-    description   String?
-    tags          String?
-    userId        Int
-    createdAt     DateTime     @default(now())
-    updatedAt     DateTime     @updatedAt
-    user          User         @relation(fields: [userId], references: [id])
-    subjects      Subject[]
-}
-model Subject {
-    id            Int          @id @default(autoincrement())
-    name          String
-    description   String?
-    tags          String?
-    workspaceId   Int
-    createdAt     DateTime     @default(now())
-    updatedAt     DateTime     @updatedAt
-    workspace     Workspace    @relation(fields: [workspaceId], references:[id])
-    modules       Module[]
-}
-model Module {
-    id            Int          @id @default(autoincrement())
-    name          String
-    description   String?
-    tags          String?
-    subjectId     Int
-    createdAt     DateTime     @default(now())
-    updatedAt     DateTime     @updatedAt
-    subject       Subject      @relation(fields: [subjectId], references: [id])
-    sources       Source[]
-    studySessions StudySession[]
-}
-model Source {
-    id            Int          @id @default(autoincrement())
-    moduleId      Int
-    text          String       @db.Text
-    sourceType    String       @default("paste")
-    status        String       @default("draft")
-    version       Int          @default(1)
-    createdAt     DateTime     @default(now())
-    updatedAt     DateTime     @updatedAt
-    module        Module       @relation(fields: [moduleId], references: [id])
-    concepts      Concept[]
-}
-model Concept {
-    id            Int          @id @default(autoincrement())
-    sourceId      Int
-    sourceVersion Int
-    title         String
-    definition    String       @db.Text
-    facts         String       @db.Text
-    tags          String?
-    status        String       @default("suggested")
-    snippet       String?      @db.Text
-    aiRunId       String?
-    createdAt     DateTime     @default(now())
-    updatedAt     DateTime     @updatedAt
 
-    source        Source       @relation(fields: [sourceId], references: [id])
-    questions     Question[]
+model Workspace {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String?
+  tags        String?
+  userId      Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id])
+  subjects    Subject[]
 }
+
+model Subject {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String?
+  tags        String?
+  workspaceId Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  modules     Module[]
+}
+
+model Module {
+  id            Int            @id @default(autoincrement())
+  name          String
+  description   String?
+  tags          String?
+  subjectId     Int
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  subject       Subject        @relation(fields: [subjectId], references: [id])
+  sources       Source[]
+  studySessions StudySession[]
+}
+
+model Source {
+  id         Int      @id @default(autoincrement())
+  moduleId   Int
+  text       String   @db.Text
+  sourceType String   @default("paste")
+  status     String   @default("draft")
+  version    Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  module   Module          @relation(fields: [moduleId], references: [id])
+  concepts Concept[]
+  versions SourceVersion[]
+}
+
+model SourceVersion {
+  id        Int      @id @default(autoincrement())
+  sourceId  Int
+  version   Int
+  text      String   @db.Text
+  createdAt DateTime @default(now())
+
+  source Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, version])
+}
+
+model Concept {
+  id            Int      @id @default(autoincrement())
+  sourceId      Int
+  sourceVersion Int
+  title         String
+  definition    String   @db.Text
+  facts         String   @db.Text
+  tags          String?
+  status        String   @default("suggested")
+  snippet       String?  @db.Text
+  aiRunId       Int?
+  aiRun         AiRun?   @relation(fields: [aiRunId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  source    Source            @relation(fields: [sourceId], references: [id])
+  questions QuestionConcept[]
+  mastery   Mastery?
+}
+
 model Question {
-    id            Int           @id @default(autoincrement())
-    type          String
-    conceptId     Int
-    text          String        @db.Text
-    difficulty    Int
-    status        String        @default("generated")
-    answer        String        @db.Text
-    choices       String?       @db.Text
-    concept       Concept       @relation(fields:[conceptId], references: [id])
-    createdAt     DateTime      @default(now())
-    updatedAt     DateTime      @updatedAt
-    attempts      Attempt[]
+  id   Int    @id @default(autoincrement())
+  type String
+
+  text       String            @db.Text
+  difficulty Int
+  status     String            @default("generated")
+  answer     String            @db.Text
+  choices    String?           @db.Text
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  attempts   Attempt[]
+  concepts   QuestionConcept[]
+  versions   QuestionVersion[]
+  aiRunId    Int?
+  aiRun      AiRun?            @relation(fields: [aiRunId], references: [id])
 }
+
+model QuestionConcept {
+  questionId Int
+  conceptId  Int
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  concept  Concept  @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, conceptId])
+}
+
 model StudySession {
-    id            Int             @id @default(autoincrement())
-    moduleId      Int
-    module        Module           @relation(fields:[moduleId], references:[id])
-    questionCount Int
-    createdAt     DateTime         @default(now())
-    updatedAt     DateTime         @updatedAt
-    attempts      Attempt[]
-             
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  moduleId      Int
+  questionCount Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id])
+  module   Module    @relation(fields: [moduleId], references: [id])
+  attempts Attempt[]
 }
+
 model Attempt {
-    id            Int            @id @default(autoincrement())
-    studySessionId Int
-    StudySessions  StudySession  @relation(fields:[studySessionId], references:[id])
-    questionId      Int
-    questions       Question      @relation(fields: [questionId], references: [id])
-    answer         String         @db.Text
-    result          String
-    timeTaken       Int?         
-    createdAt       DateTime      @default(now())
-    updatedAt       DateTime       @updatedAt
+  id                Int @id @default(autoincrement())
+  studySessionId    Int
+  questionId        Int
+  questionVersionId Int
+
+  studySession    StudySession    @relation(fields: [studySessionId], references: [id])
+  question        Question        @relation(fields: [questionId], references: [id])
+  questionVersion QuestionVersion @relation(fields: [questionVersionId], references: [id])
+
+  answer String @db.Text
+  result String
+
+  aiRunId      Int?
+  aiRun        AiRun? @relation(fields: [aiRunId], references: [id])
+  aiResult     String?
+  aiRationale  String? @db.Text
+  aiConfidence Float?
+
+  userOverride   String?
+  overrideReason String? @db.Text
+  overriddenAt   DateTime?
+
+  timeTaken Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Mastery {
+  id              Int       @id @default(autoincrement())
+  conceptId       Int       @unique
+  score           Float     @default(0)
+  bucket          String    @default("New")
+  lastStudiedAt   DateTime?
+  nextReviewAt    DateTime?
+  reviewInterval  Int       @default(0)
+  correctStreak   Int       @default(0)
+  incorrectStreak Int       @default(0)
+  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime  @default(now())
+
+  concept Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+}
+
+model QuestionVersion {
+  id         Int      @id @default(autoincrement())
+  questionId Int
+  version    Int
+  text       String   @db.Text
+  answer     String   @db.Text
+  choices    String?  @db.Text
+  difficulty Int
+  createdAt  DateTime @default(now())
+
+  question Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  attempts Attempt[]
+
+  @@unique([questionId, version])
+}
+
+model AiRun {
+  id            Int      @id @default(autoincrement())
+  model         String
+  promptVersion String
+  input         String   @db.Text
+  output        String   @db.Text
+  createdAt     DateTime @default(now())
+
+  concepts  Concept[]
+  questions Question[]
+  attempts  Attempt[]
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  action     String
+  entityType String
+  entityId   Int
+  beforeData String?  @db.Text
+  afterData  String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
 }
