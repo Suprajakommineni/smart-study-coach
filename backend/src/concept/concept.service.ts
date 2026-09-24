@@ -53,9 +53,9 @@ export class ConceptService {
     if (!existing || !merging) {
       throw new Error('One or both concepts not found');
     }
-    const existingFacts = JSON.parse(existing.facts); // string → real array
-    const mergingFacts = JSON.parse(merging.facts); // string → real array
-    const combinedFacts = [...existingFacts, ...mergingFacts]; // join both arrays together
+    const existingFacts = JSON.parse(existing.facts); 
+    const mergingFacts = JSON.parse(merging.facts); 
+    const combinedFacts = [...existingFacts, ...mergingFacts]; 
     const finalConcept = await this.prisma.concept.update({
       where: { id: keepId },
       data: {

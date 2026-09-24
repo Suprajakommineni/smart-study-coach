@@ -25,7 +25,6 @@ export class QuestionService {
     const allNewQuestions = [];
 
     for (const concept of acceptedConcepts) {
-      // Idempotency: remove existing 'generated' questions for this concept, keep 'user-edited' ones untouched
       await this.prisma.question.deleteMany({
         where: {
           conceptId: concept.id,
@@ -74,7 +73,10 @@ Respond ONLY with valid JSON, no other text, in this exact format:
         allNewQuestions.push(...createdQuestions);
       } catch (error) {
         // skip this concept's questions on failure, continue with others
-        console.log(`Question generation failed for concept ${concept.id}`, error);
+        console.log(
+          `Question generation failed for concept ${concept.id}`,
+          error,
+        );
       }
     }
 
