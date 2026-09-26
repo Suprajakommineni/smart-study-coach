@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 
-import { Check, Pencil, Trash2, X } from "lucide-react";
+import { Check, Pencil, Trash2, X, ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -40,7 +40,7 @@ type Question = {
 
 export default function QuestionBank() {
   const { moduleId } = useParams();
-
+  const navigate = useNavigate();
   const [questions, setQuestions] = useState<Question[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -175,21 +175,34 @@ export default function QuestionBank() {
     <div className="space-y-6">
       {/* HEADER */}
 
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">
-            Question Bank
-          </h1>
+      {/* HEADER */}
 
-          <p className="mt-1 text-sm text-gray-500">
-            Review, edit, approve and manage questions for this module.
-          </p>
-        </div>
+<div className="space-y-4">
+  <button
+    type="button"
+    onClick={() => navigate(-1)}
+    className="flex items-center gap-2 text-sm text-gray-500 transition-colors hover:text-gray-900"
+  >
+    <ArrowLeft size={17} />
+    Back
+  </button>
 
-        <Button onClick={handleGenerate} disabled={generating}>
-          {generating ? "Generating..." : "Generate Questions"}
-        </Button>
-      </div>
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <h1 className="text-2xl font-semibold text-gray-900">
+        Question Bank
+      </h1>
+
+      <p className="mt-1 text-sm text-gray-500">
+        Review, edit, approve and manage questions for this module.
+      </p>
+    </div>
+
+    <Button onClick={handleGenerate} disabled={generating}>
+      {generating ? "Generating..." : "Generate Questions"}
+    </Button>
+  </div>
+</div>
 
       {/* ERROR */}
 
