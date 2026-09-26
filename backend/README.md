@@ -1,419 +1,155 @@
 # Smart Study Coach
 
-A full-stack study application that turns pasted notes into AI-generated concepts and quiz questions, with review gating, mastery tracking, and spaced review.
+A full-stack study app that turns pasted notes into AI-generated concepts, review-gated flashcards, auto-generated quiz questions, and a mastery/spacing tracker.
 
-## Tech Stack
+**Live demo:**
+- Frontend: https://smart-study-coach-5ll2.vercel.app
+- Backend API: https://smartstudycoach2-du0saxkp.b4a.run
 
-- **Frontend:** React + TypeScript + Tailwind CSS + shadcn/ui
-- **Backend:** NestJS + TypeScript
-- **Database:** MySQL + Prisma
-- **AI:** Groq
-- **Authentication:** JWT + bcrypt
-- **Frontend Hosting:** Vercel
-- **Backend Hosting:** Back4app Containers
-- **Database Hosting:** Aiven MySQL
+> Note: the backend runs on a free-tier container that sleeps after a period of inactivity. The first request after being idle may take 10–30 seconds while it wakes up — this is expected, not a bug.
 
 ---
 
-## Project Setup
+## Tech Stack
 
-### 1. Backend Setup
+- **Frontend:** React + TypeScript + Tailwind CSS + shadcn/ui, deployed on Vercel
+- **Backend:** NestJS + TypeScript, deployed as a Docker container on Back4app Containers
+- **Database:** MySQL, hosted on Aiven (free tier)
+- **AI:** Groq (`openai/gpt-oss-20b`) for concept extraction and question generation, using structured JSON-schema outputs
+- **Auth:** JWT-based, bcrypt-hashed passwords
 
-Navigate to the backend:
+---
+
+## Setup Instructions
+
+### Prerequisites
+- Node.js 20+
+- A MySQL database (local or hosted)
+- A free Groq API key from [console.groq.com](https://console.groq.com)
+
+### Backend
 
 ```bash
 cd backend
 npm install
 ```
 
-Create a `.env` file inside the `backend` folder:
-
-```env
+Create a `.env` file in `backend/`:
+```
 DATABASE_URL="mysql://user:password@host:port/dbname?ssl-mode=REQUIRED"
 GROQ_API_KEY="your-groq-key"
 FRONTEND_URL="http://localhost:5173"
 PORT=3000
 ```
 
-Run database migrations:
-
+Run migrations and start:
 ```bash
 npx prisma migrate deploy
-```
-
-Generate Prisma Client:
-
-```bash
 npx prisma generate
-```
-
-Start the backend in development mode:
-
-```bash
 npm run start:dev
 ```
 
-The backend will run on:
-
-```text
-http://localhost:3000
-```
-
-### 2. Frontend Setup
-
-Open another terminal and navigate to the frontend:
+### Frontend
 
 ```bash
 cd frontend
 npm install
 ```
 
-Create a `.env` file inside the `frontend` folder:
-
-```env
+Create a `.env` file in `frontend/`:
+```
 VITE_API_URL="http://localhost:3000"
 ```
-
-Start the frontend:
 
 ```bash
 npm run dev
 ```
 
-The frontend will run on:
-
-```text
-http://localhost:5173
-```
-
----
-
-## Database Schema & Migrations
-
-The Prisma schema is located at:
-
-```text
-backend/prisma/schema.prisma
-```
-
-Database migrations are located at:
-
-```text
-backend/prisma/migrations/
-```
-
-### Main Entity Relationship
-
-```text
-User
-  ↓
-Workspace
-  ↓
-Subject
-  ↓
-Module
-  ↓
-Source
-  ↓
-Concept
-  ↓
-Question
-  ↓
-StudySession
-  ↓
-Attempt
-```
-
-### Additional Entities
-
-The application also contains:
-
-- `Mastery`
-- `SourceVersion`
-- `QuestionVersion`
-- `AiRun`
-- `AuditLog`
-- `QuestionConcept`
-
-These entities support mastery tracking, version history, AI provenance, auditing, and concept-question relationships.
+### Deployment notes
+- Backend is deployed via Dockerfile on Back4app Containers. Build command: `npm install && npx prisma generate && npm run build`. Start command: `node dist/main`.
+- Frontend is deployed on Vercel, with `VITE_API_URL` set as an environment variable pointing at the deployed backend URL above.
+- CORS on the backend accepts `localhost:5173` and any origin matching `https://smart-study-coach*.vercel.app`, since Vercel generates a unique hashed preview URL per deployment in addition to the stable production URL — a fixed single-origin string would break on every new deployment.
 
 ---
 
-## Mastery & Spacing Algorithm
+## Database Schema
 
-Each concept has a mastery score from **0 to 100**.
+Full schema lives in `backend/prisma/schema.prisma`; migrations are in `backend/prisma/migrations/`. Core entity chain:
 
-### Mastery Updates
-
-```text
-Correct answer   → Mastery increases
-Incorrect answer → Mastery decreases
+```
+User → Workspace → Subject → Module → Source → Concept → Question → StudySession → Attempt
+                                          ↓         ↓          ↓
+                                    SourceVersion  Mastery  QuestionVersion
 ```
 
-The mastery score is always clamped between `0` and `100`.
+`Question` links to `Concept` through a `QuestionConcept` join table (many-to-many), so a single question can remain correctly linked to multiple concepts after a merge. Supporting tables: `AiRun` (logs every AI call — model, prompt version, full input, full output), `AuditLog` (records accept/edit/reject/merge/approve/retire/generate actions with before/after snapshots).
 
-### Mastery Levels
+---
 
-| Score | Level |
-|------:|-------|
+## Mastery + Spacing Algorithm
+
+Each concept has a `Mastery` record with a `score` (0–100).
+
+**Update rule, per attempt:**
+```
+correct   → score += 10 * recencyWeight
+incorrect → score -= 15 * recencyWeight
+score clamped to [0, 100]
+```
+`recencyWeight` gives more recent attempts more influence than older ones, so a concept's mastery reflects the student's *current* grasp rather than an unweighted historical average.
+
+**Buckets:**
+| Score range | Bucket |
+|---|---|
 | 0–24 | New |
 | 25–49 | Learning |
 | 50–79 | Proficient |
 | 80–100 | Mastered |
 
-### Review Intervals
+**Due-for-review rule (deterministic — identical data always produces the identical due list):**
+- New / Learning → due again after 1 day
+- Proficient → due again after 3 days
+- Mastered → due again after 7 days
+- Overridden regardless of bucket: if the most recent attempt was incorrect, the concept is due again the next day
 
-| Mastery Level | Review Interval |
-|---|---|
-| New / Learning | 1 day |
-| Proficient | 3 days |
-| Mastered | 7 days |
-
-If the latest attempt is incorrect, the concept becomes due for review the next day.
-
-The scheduler is deterministic and uses:
-
-- Mastery score
-- Attempt history
-- Previous review date
-- Current date
-
-No random scheduling is used.
+Each due item stores a short, human-readable explanation (e.g. *"3 days since last review, mastery 42 (Learning), last attempt incorrect"*), satisfying the "why is this due" requirement without any non-deterministic behavior — the scheduler is pure arithmetic and date comparison, never randomness.
 
 ---
 
-## Deduplication & Idempotency Strategy
+## Dedup / Idempotency Strategy
 
-The application uses different strategies for generated questions, source processing, and concept merging.
+**Question generation:** regenerating questions for a module first flips any existing questions still in `generated` status to `retired` (not deleted), then creates a fresh batch. Questions a user has manually corrected carry `status: 'user-edited'` and are never touched by regeneration — a student's corrections survive any number of future regenerations. Within a single generation run, questions are also deduplicated by normalized text before saving, so the AI can't accidentally save the same question twice.
 
-### Question Generation
+**Concept re-processing after a source edit:** editing a `Source` increments its `version` and writes a `SourceVersion` snapshot rather than mutating history in place. Concepts already `accepted` from an older version are marked `outdated` (not deleted), prompting the user to review and refresh rather than silently losing their prior review decisions.
 
-When questions are regenerated:
-
-1. Existing `generated` questions are removed.
-2. New generated questions replace them.
-3. `user-edited` questions are preserved.
-
-This prevents duplicate generated questions while protecting questions that were manually modified by the user.
-
-### Source Re-processing
-
-When a source is processed again:
-
-1. A new source version is created.
-2. The previous source version remains available.
-3. Existing concepts can be marked as `outdated`.
-4. Processing history is preserved.
-
-This allows the system to keep track of changes to the original study material.
-
-### Concept Merging
-
-When two concepts are merged:
-
-1. Facts from both concepts are combined.
-2. Related questions are reassigned to the surviving concept.
-3. Mastery is recalculated using the combined attempt history.
-4. The merged concept is marked as `merged` instead of being permanently deleted.
+**Merging concepts:** merging combines both concepts' facts into the surviving concept, re-points any linked questions from the merged-away concept to the survivor via `QuestionConcept`, recalculates the survivor's mastery from the combined attempt history, and marks the merged-away concept `status: 'merged'` (never deleted) so its history stays traceable.
 
 ---
 
-## Provenance
+## Provenance Format & AI Safety Constraints
 
-AI-generated content stores information that allows it to be traced back to the original study material.
+Every AI-generated concept and question stores an `aiRunId` pointing to an `AiRun` record, which logs the exact model name, prompt version string, full prompt input, and full raw output for that call — so any generated item can be traced back to precisely which AI call produced it. Concepts additionally store `sourceId` + `sourceVersion` (which pasted text, and which version of it) and a `snippet` of the originating text.
 
-### Provenance Information
-
-Generated concepts can contain:
-
-```text
-sourceId
-sourceVersion
-snippet
-aiRunId
-```
-
-The `AiRun` entity records information such as:
-
-- AI model
-- Prompt version
-- Input
-- Output
-
-This makes it possible to trace generated concepts and questions back to their source material and AI generation run.
-
----
-
-## AI Safety Constraints
-
-The AI generation process is designed to keep generated content grounded in the student's supplied study material.
-
-### Input
-
-The AI receives the student's supplied study content as its source material.
-
-### Structured Output
-
-AI responses are expected to follow a fixed JSON structure.
-
-#### Concept Structure
-
-```text
-title
-definition
-facts
-```
-
-#### Question Structure
-
-```text
-question
-answer
-choices
-```
-
-### Validation
-
-AI responses are:
-
-1. Parsed.
-2. Validated against the expected structure.
-3. Checked before being stored.
-
-Malformed or unexpected AI responses are not stored directly.
+**Safety constraints:**
+- The AI only ever receives the student's own pasted notes (for concepts) or the titles/definitions of concepts the student has already accepted (for questions) — never arbitrary external content.
+- All AI calls request a strict JSON schema response (`response_format: json_schema`, `strict: true`) rather than free-form text, and every field is validated against expected shape/values before being saved (e.g. an MCQ must have exactly 4 choices and its answer must exactly match one of them, or the item is silently discarded rather than saved malformed).
+- A source that fails AI processing is marked `needs review` rather than left in an ambiguous state or saved with partial/garbage data.
 
 ---
 
 ## Key Tradeoffs & Limitations
 
-### AI Provider
-
-The project initially used Gemini and was later switched to Groq because of availability issues.
-
-The AI integration is isolated so another AI provider can be added later without changing the rest of the application significantly.
-
-### Question Grading
-
-Multiple-choice and true/false questions can be graded deterministically.
-
-Free-text answer grading is not fully automated and requires review.
-
-### PDF & Image Processing
-
-PDF/image uploads currently store metadata.
-
-OCR and automatic text extraction are not implemented.
-
-### Concept Facts
-
-Concept facts are stored as JSON instead of separate database records because the number of facts per concept is small and bounded.
-
-### Hosting
-
-The application uses free-tier hosting services and is intended primarily for demonstration and evaluation rather than production-scale workloads.
+- **AI provider swapped mid-build.** Initial integration targeted Google Gemini's free tier, which was intermittently unavailable (persistent 503 errors) during development. The implementation was switched to Groq. Question generation was further restructured from one large sequential AI call into three smaller calls (6 MCQ + 5 true/false + 4 short-answer) run concurrently, with the resulting database writes also parallelized — this was necessary to stay under the hosting platform's gateway timeout, a real constraint hit during deployment rather than a theoretical one.
+- **Short-answer grading** uses deterministic string comparison for MCQ/True-False as required. AI-based grading with a rationale and confidence score for free-text short answers was designed but not fully wired into the study-session flow given time constraints.
+- **PDF/image upload** is intentionally limited to metadata only (filename, type) per the assessment's own allowance — OCR/text extraction was explicitly marked optional and was not implemented.
+- **Facts are stored as a JSON-encoded string** within the `Concept` record rather than a separate `Fact` table, since the list is small and bounded (3–8 items) and doesn't need independent querying or editing — a normal simplification for this use case.
+- **Free-tier hosting tradeoffs:** the backend container sleeps after inactivity (cold start ~10–30s on first request); the database is a free-tier Aiven MySQL instance suitable for demo/evaluation, not production load. A cross-platform migration bug was also found and fixed during deployment: early migrations were generated on Windows, where MySQL table names are case-insensitive, and referenced the same table with inconsistent casing (e.g. `Module` vs `module`) across migrations — harmless locally, but a hard failure against Linux-hosted MySQL (Aiven), where table names are case-sensitive. Resolved by regenerating one consistently-cased migration from the current schema for the hosted database.
+- **Authorization scoping** was tightened during final review: all nested resources (Subject/Module/Source/Concept/Question) verify the requesting user owns the parent Workspace chain before returning or modifying data, matching the "user only sees their own content" requirement.
 
 ---
 
-## Demo Dataset
+## Seeded Demo Dataset
 
-For quick evaluation, create a workspace, subject, module, and source using sample content such as:
+A quick way to evaluate: sign up, create one workspace/subject/module, then paste this sample text as a source and click "Process" to see the full concept → question → study session pipeline in action:
 
-> Mitosis is the process of cell division that produces two identical daughter cells. It occurs in four phases: prophase, metaphase, anaphase, and telophase. During prophase, chromosomes condense and become visible.
-
-This sample can be used to test:
-
-- Source creation
-- AI concept generation
-- Question generation
-- Review gating
-- Mastery tracking
-- Spaced review
-
----
-
-## Project Structure
-
-```text
-smart-study-coach/
-│
-├── README.md
-│
-├── backend/
-│   ├── prisma/
-│   │   ├── migrations/
-│   │   └── schema.prisma
-│   │
-│   └── src/
-│       ├── auth/
-│       ├── workspace/
-│       ├── subject/
-│       ├── module/
-│       ├── source/
-│       ├── concept/
-│       ├── question/
-│       ├── mastery/
-│       ├── study-session/
-│       └── ...
-│
-└── frontend/
-    └── src/
-        ├── components/
-        ├── pages/
-        ├── contexts/
-        └── ...
-```
-
----
-
-## Environment Variables
-
-The following environment variables are required.
-
-### Backend
-
-```env
-DATABASE_URL="your-mysql-database-url"
-GROQ_API_KEY="your-groq-api-key"
-FRONTEND_URL="your-frontend-url"
-PORT=3000
-```
-
-### Frontend
-
-```env
-VITE_API_URL="your-backend-api-url"
-```
-
-Do not commit `.env` files or secret API keys to the repository.
-
----
-
-## Deployment
-
-### Frontend
-
-The frontend is deployed using **Vercel**.
-
-### Backend
-
-The NestJS backend is deployed using **Back4app Containers**.
-
-### Database
-
-The MySQL database is hosted using **Aiven**.
-
----
-
-## Authentication
-
-The application uses JWT-based authentication.
-
-Passwords are hashed using bcrypt before being stored.
-
-Protected API routes require a valid JWT token.
-
----
-
-## License
-
-This project is developed as a study and evaluation project.
+> "Mitosis is the process of cell division that produces two identical daughter cells. It occurs in four phases: prophase, metaphase, anaphase, and telophase. During prophase, chromosomes condense and become visible."
