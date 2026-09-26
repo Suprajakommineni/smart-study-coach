@@ -12,7 +12,7 @@ import {
   editQuestion,
   fetchQuestions,
   retireQuestion,
-} from "../api/qustionapi";
+} from "../api/questionapi";
 
 type QuestionType = "mcq" | "true_false" | "short_answer";
 
