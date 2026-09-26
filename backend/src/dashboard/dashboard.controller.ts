@@ -1,26 +1,14 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Request,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { DashboardService } from './dashboard.service.js';
 
-@Controller('modules/:moduleId/dashboard')
-@UseGuards(AuthGuard('jwt'))
+@Controller('dashboard')
 export class DashboardController {
-  constructor(private dashboardService: DashboardService) {}
+  constructor(private readonly dashboardService: DashboardService) {}
 
+  @UseGuards(AuthGuard('jwt'))
   @Get()
-getDashboard(
-  @Param('moduleId') moduleId: string,
-  @Request() req: any,
-) {
-  return this.dashboardService.getModuleDashboard(
-    Number(moduleId),
-    req.user.userId,
-  );
-}
+  async getDashboard(@Req() req: any) {
+    return this.dashboardService.getDashboardForUser(req.user.userId);
+  }
 }

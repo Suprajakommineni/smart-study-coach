@@ -19,18 +19,25 @@ export class AuditLogService {
         action,
         entityType,
         entityId,
-        beforeData: beforeData
-          ? JSON.stringify(beforeData)
-          : null,
-        afterData: afterData
-          ? JSON.stringify(afterData)
-          : null,
+        beforeData: beforeData ? JSON.stringify(beforeData) : null,
+        afterData: afterData ? JSON.stringify(afterData) : null,
       },
     });
   }
 
   async findAll() {
     return this.prisma.auditLog.findMany({
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  async getLogsForUser(userId: number) {
+    return this.prisma.auditLog.findMany({
+      where: {
+        userId,
+      },
       orderBy: {
         createdAt: 'desc',
       },

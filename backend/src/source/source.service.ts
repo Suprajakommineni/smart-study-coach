@@ -1,5 +1,4 @@
-
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import Groq from 'groq-sdk';
@@ -12,86 +11,65 @@ export class SourceService {
     private prisma: PrismaService,
     private auditLogService: AuditLogService,
   ) {
-    this.groq = new Groq({
-      apiKey: process.env.GROQ_API_KEY,
-    });
+    this.groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
   }
 
-  async create(moduleId: number, text: string) {
+  private async verifyModuleOwnership(moduleId: number, userId: number) {
+    const module = await this.prisma.module.findFirst({
+      where: { id: moduleId, subject: { workspace: { userId } } },
+    });
+    if (!module) throw new NotFoundException('Module not found');
+  }
+
+  private async verifySourceOwnership(sourceId: number, userId: number) {
+    const source = await this.prisma.source.findFirst({
+      where: { id: sourceId, module: { subject: { workspace: { userId } } } },
+    });
+    if (!source) throw new NotFoundException('Source not found');
+    return source;
+  }
+
+  async create(moduleId: number, userId: number, text: string) {
+    await this.verifyModuleOwnership(moduleId, userId);
+
     const source = await this.prisma.source.create({
-      data: {
-        moduleId,
-        text,
-        status: 'draft',
-        version: 1,
-      },
+      data: { moduleId, text, status: 'draft', version: 1 },
     });
 
     await this.prisma.sourceVersion.create({
-      data: {
-        sourceId: source.id,
-        version: 1,
-        text,
-      },
+      data: { sourceId: source.id, version: 1, text },
     });
 
     return source;
   }
 
-  async update(
-    sourceId: number,
-    userId: number,
-    text: string,
-  ) {
-    const source = await this.prisma.source.findUnique({
-      where: { id: sourceId },
-    });
-
-    if (!source) {
-      throw new Error('Source not found');
-    }
+  async update(sourceId: number, userId: number, text: string) {
+    const source = await this.verifySourceOwnership(sourceId, userId);
 
     const beforeSource = source;
-
     const newVersion = source.version + 1;
 
-    const updatedSource = await this.prisma.$transaction(
-      async (tx) => {
-        const updated = await tx.source.update({
-          where: { id: sourceId },
-          data: {
-            text,
-            version: newVersion,
-            status: 'draft',
-          },
-        });
+    const updatedSource = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.source.update({
+        where: { id: sourceId },
+        data: { text, version: newVersion, status: 'draft' },
+      });
 
-        await tx.sourceVersion.create({
-          data: {
-            sourceId,
-            version: newVersion,
-            text,
-          },
-        });
+      await tx.sourceVersion.create({
+        data: { sourceId, version: newVersion, text },
+      });
 
-        // Only previously accepted concepts become outdated.
-        // User-edited concepts are not automatically changed.
-        await tx.concept.updateMany({
-          where: {
-            sourceId,
-            sourceVersion: {
-              lt: newVersion,
-            },
-            status: 'accepted',
-          },
-          data: {
-            status: 'outdated',
-          },
-        });
+      await tx.concept.updateMany({
+        where: {
+          sourceId,
+          sourceVersion: { lt: newVersion },
+          status: 'accepted',
+        },
+        data: { status: 'outdated' },
+      });
 
-        return updated;
-      },
-    );
+      return updated;
+    });
 
     await this.auditLogService.createLog(
       userId,
@@ -105,20 +83,16 @@ export class SourceService {
     return updatedSource;
   }
 
-  async findAllForModule(moduleId: number) {
+  async findAllForModule(moduleId: number, userId: number) {
+    await this.verifyModuleOwnership(moduleId, userId);
     return this.prisma.source.findMany({
       where: { moduleId },
-      include: {
-        versions: true,
-      },
+      include: { versions: true },
     });
   }
 
-  // Keep your existing process() method below this.
-
-  async process(sourceId: number) {
-    const source = await this.prisma.source.findUnique({ where: { id: sourceId } });
-    if (!source) throw new Error('Source not found');
+  async process(sourceId: number, userId: number) {
+    const source = await this.verifySourceOwnership(sourceId, userId);
 
     try {
       const prompt = `
@@ -132,11 +106,7 @@ For each concept, give:
 
 Respond ONLY with valid JSON, in this exact format, no other text:
 [
-  {
-    "title": "...",
-    "definition": "...",
-    "facts": ["...", "...", "..."]
-  }
+  { "title": "...", "definition": "...", "facts": ["...", "...", "..."] }
 ]
 
 Text to analyze:

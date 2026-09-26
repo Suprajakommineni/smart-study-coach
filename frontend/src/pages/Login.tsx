@@ -3,14 +3,14 @@ import { Link } from "react-router-dom";
 import { loginUser } from "../api/authapi";
 
 type FormError = {
-  email: string,
-  password: string
-}
+  email: string;
+  password: string;
+};
 
-const NoError : FormError = {
-  email: '',
-  password: ''
-}
+const NoError: FormError = {
+  email: "",
+  password: "",
+};
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -23,21 +23,27 @@ export default function Login() {
     setError(NoError);
     setLoading(true);
     try {
-      if(!email.trim() || !password.trim() ) {
+      if (!email.trim() || !password.trim()) {
         setError({
           email: !email.trim() ? "Email is required" : "",
-          password: !password.trim() ? "Password is required" : ""
-        })
+          password: !password.trim() ? "Password is required" : "",
+        });
         return;
       }
       const data = await loginUser(email, password);
       localStorage.setItem("token", data.accessToken);
+      localStorage.setItem("email", data.email);
       window.location.href = "/workspaces";
     } catch (err) {
-      const message = err instanceof Error? err.message : "Something went wrong"
+      const message =
+        err instanceof Error ? err.message : "Something went wrong";
       setError({
-        email: message.toLowerCase().includes("credentials") ? "Invalid Credentials" : "",
-        password: message.toLowerCase().includes("password") ? "Invalid Password" : "",
+        email: message.toLowerCase().includes("credentials")
+          ? "Invalid Credentials"
+          : "",
+        password: message.toLowerCase().includes("password")
+          ? "Invalid Password"
+          : "",
       });
     } finally {
       setLoading(false);
@@ -98,7 +104,8 @@ export default function Login() {
           <span className="text-indigo-600">you left off</span>.
         </h2>
         <p className="text-gray-500 text-lg mb-10 max-w-sm">
-          Your workspaces, concepts, and mastery progress — saved and waiting for you.
+          Your workspaces, concepts, and mastery progress — saved and waiting
+          for you.
         </p>
 
         {/* Concept mastery mockup illustration */}
@@ -201,7 +208,15 @@ export default function Login() {
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          <rect x="368" y="94" width="70" height="8" rx="4" fill="#94A3B8" fillOpacity="0.5" />
+          <rect
+            x="368"
+            y="94"
+            width="70"
+            height="8"
+            rx="4"
+            fill="#94A3B8"
+            fillOpacity="0.5"
+          />
           <rect x="330" y="116" width="100" height="6" rx="3" fill="#CBD5E1" />
           <rect
             x="330"
@@ -239,7 +254,9 @@ export default function Login() {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="Email address"
             />
-            {error.email && <p className="text-red-600 text-sm">{error.email}</p>}
+            {error.email && (
+              <p className="text-red-600 text-sm">{error.email}</p>
+            )}
 
             <input
               type="password"
@@ -250,7 +267,9 @@ export default function Login() {
               placeholder="Password"
             />
 
-            {error.password && <p className="text-red-600 text-sm">{error.password}</p>}
+            {error.password && (
+              <p className="text-red-600 text-sm">{error.password}</p>
+            )}
 
             <button
               type="submit"

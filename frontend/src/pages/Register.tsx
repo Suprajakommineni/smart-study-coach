@@ -3,14 +3,14 @@ import { Link } from "react-router-dom";
 import { registerUser } from "../api/authapi";
 
 type FormError = {
-  email: string,
-  password: string
-}
+  email: string;
+  password: string;
+};
 
-const NoError : FormError = {
-  email: '',
-  password: ''
-}
+const NoError: FormError = {
+  email: "",
+  password: "",
+};
 
 export default function Register() {
   const [email, setEmail] = useState("");
@@ -24,20 +24,23 @@ export default function Register() {
 
     setLoading(true);
     try {
-      if(!email.trim() || !password.trim() ) {
+      if (!email.trim() || !password.trim()) {
         setError({
           email: !email.trim() ? "Email is required" : "",
-          password: !password.trim() ? "Password is required" : ""
-        })
+          password: !password.trim() ? "Password is required" : "",
+        });
         return;
       }
       await registerUser(email, password);
       window.location.href = "/login";
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Something went wrong"
+      const message =
+        err instanceof Error ? err.message : "Something went wrong";
       setError({
-        email: message.toLowerCase().includes("email") ? "Email already Exists" : "",
-        password:  message.toLowerCase().includes("email") ? "" : message,
+        email: message.toLowerCase().includes("email")
+          ? "Email already Exists"
+          : "",
+        password: message.toLowerCase().includes("email") ? "" : message,
       });
     } finally {
       setLoading(false);
@@ -98,7 +101,8 @@ export default function Register() {
           <span className="text-indigo-600">mastered concepts.</span>
         </h2>
         <p className="text-gray-500 text-lg mb-10 max-w-sm">
-          Paste your notes, get AI-generated concepts and quizzes, and track your mastery over time.
+          Paste your notes, get AI-generated concepts and quizzes, and track
+          your mastery over time.
         </p>
 
         <svg viewBox="0 0 480 320" className="w-full max-w-md">
@@ -200,7 +204,15 @@ export default function Register() {
             strokeLinecap="round"
             strokeLinejoin="round"
           />
-          <rect x="368" y="94" width="70" height="8" rx="4" fill="#94A3B8" fillOpacity="0.5" />
+          <rect
+            x="368"
+            y="94"
+            width="70"
+            height="8"
+            rx="4"
+            fill="#94A3B8"
+            fillOpacity="0.5"
+          />
           <rect x="330" y="116" width="100" height="6" rx="3" fill="#CBD5E1" />
           <rect
             x="330"
@@ -231,28 +243,32 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} className="space-y-3">
             <div>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Email address"
-            />
-                        {error.email && <p className="text-red-600 text-sm mt-1">{error.email}</p>}
-</div>
-<div>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Password"
-            />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="Email address"
+              />
+              {error.email && (
+                <p className="text-red-600 text-sm mt-1">{error.email}</p>
+              )}
+            </div>
+            <div>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="Password"
+              />
 
-            {error.password && <p className="text-red-600 text-sm mt-1">{error.password}</p>}
-</div>
+              {error.password && (
+                <p className="text-red-600 text-sm mt-1">{error.password}</p>
+              )}
+            </div>
             <button
               type="submit"
               disabled={loading}

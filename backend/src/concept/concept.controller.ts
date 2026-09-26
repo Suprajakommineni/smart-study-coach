@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, UseGuards, Body } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards, Request } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ConceptService } from './concept.service.js';
 
@@ -8,9 +8,13 @@ export class ConceptController {
   constructor(private conceptService: ConceptService) {}
 
   @Get()
-  async findAllConcepts(@Param('sourceId') sourceId: string) {
-    return this.conceptService.findAllConcepts(Number(sourceId));
+  async findAllConcepts(
+    @Param('sourceId') sourceId: string,
+    @Request() req: any,
+  ) {
+    return this.conceptService.findAllConcepts(
+      Number(sourceId),
+      req.user.userId,
+    );
   }
-  
-  
 }

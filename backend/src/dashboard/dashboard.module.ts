@@ -5,7 +5,9 @@ import { PrismaService } from '../prisma/prisma.service.js';
 
 @Module({
   controllers: [DashboardController],
-  providers: [DashboardService, PrismaService],
-  exports: [DashboardService],
+  providers: [
+    DashboardService,
+    PrismaService,
+  ],
 })
 export class DashboardModule {}

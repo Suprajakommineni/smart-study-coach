@@ -2,48 +2,91 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Register from "./pages/Register";
 import Login from "./pages/Login";
+
 import Dashboard from "./pages/Dashboard";
-import WorkSpace from "./pages/Workspace";
+import Workspace from "./pages/Workspace";
 import Subject from "./pages/Subject";
 import Module from "./pages/Module";
-import Source from "./pages/Sources";
+import Sources from "./pages/Sources";
 import ConceptReview from "./pages/ConceptReview";
+import QuestionBank from "./pages/QuestionBank";
+import StudySession from "./pages/StudySession";
+import Mastery from "./pages/Mastery";
+import AuditLog from "./pages/AuditLog";
+
+import Dashboardlayout from "./layout/Pagelayout";
 
 import ProtectedRoute from "./routes/ProtectedRoute";
-import PublicRoute from "./routes/PublicRoute";
+import PublicOnlyRoute from "./routes/PublicRoute";
 
-const App = () => {
+export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Routes */}
-        <Route element={<PublicRoute />}>
+        {/* Public */}
+        <Route element={<PublicOnlyRoute />}>
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
         </Route>
 
-        {/* Protected Routes */}
+        {/* Protected */}
         <Route element={<ProtectedRoute />}>
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route element={<Dashboardlayout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
 
-          <Route path="/workspaces" element={<WorkSpace />} />
+            {/* Workspace */}
+            <Route
+              path="/workspaces"
+              element={<Workspace />}
+            />
 
-          <Route
-            path="/workspaces/:workspaceId/subjects"
-            element={<Subject />}
-          />
+            {/* Subjects */}
+            <Route
+              path="/workspaces/:workspaceId/subjects"
+              element={<Subject />}
+            />
 
-          <Route
-            path="/workspaces/:workspaceId/subjects/:subjectId/modules"
-            element={<Module />}
-          />
+            {/* Modules */}
+            <Route
+              path="/workspaces/:workspaceId/subjects/:subjectId/modules"
+              element={<Module />}
+            />
 
-<Route path="/modules/:moduleId/sources" element={<Source />} />
-          <Route path="/sources/:sourceId/concepts" element={<ConceptReview />} />
+            {/* Sources */}
+            <Route
+              path="/workspaces/:workspaceId/subjects/:subjectId/modules/:moduleId/sources"
+              element={<Sources />}
+            />
+
+            {/* Concepts */}
+            <Route
+              path="/workspaces/:workspaceId/subjects/:subjectId/modules/:moduleId/sources/:sourceId/concepts"
+              element={<ConceptReview />}
+            />
+
+            {/* Question Bank */}
+            <Route
+              path="/modules/:moduleId/questions"
+              element={<QuestionBank />}
+            />
+
+            {/* Study Session */}
+            <Route
+              path="/modules/:moduleId/study-session"
+              element={<StudySession />}
+            />
+
+            {/* Other */}
+            <Route path="/mastery" element={<Mastery />} />
+
+            <Route
+              path="/auditlog"
+              element={<AuditLog />}
+            />
+
+          </Route>
         </Route>
       </Routes>
     </BrowserRouter>
   );
-};
-
-export default App;
+}

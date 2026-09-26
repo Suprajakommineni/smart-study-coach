@@ -5,78 +5,44 @@ import { PrismaService } from '../prisma/prisma.service.js';
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-  async getModuleDashboard(moduleId: number, userId: number) {
-    // Check that the module belongs to the logged-in user
-    const module = await this.prisma.module.findFirst({
+  async getDashboardForUser(userId: number) {
+    const concepts = await this.prisma.concept.findMany({
       where: {
-        id: moduleId,
-        subject: {
-          workspace: {
-            userId,
-          },
-        },
-      },
-    });
-
-    if (!module) {
-      throw new Error('Module not found');
-    }
-
-    // Get mastery records for active concepts in this module
-    const masteryRecords = await this.prisma.mastery.findMany({
-      where: {
-        concept: {
-          source: {
-            moduleId,
-          },
-          status: {
-            notIn: ['rejected', 'merged', 'outdated'],
+        status: 'accepted',
+        source: {
+          module: {
+            subject: {
+              workspace: {
+                userId,
+              },
+            },
           },
         },
       },
       include: {
-        concept: true,
+        mastery: true,
+        source: {
+          include: {
+            module: {
+              include: {
+                subject: true,
+              },
+            },
+          },
+        },
       },
     });
 
-    // Mastery distribution
-    const masteryDistribution = {
-      New: 0,
-      Learning: 0,
-      Proficient: 0,
-      Mastered: 0,
-    };
-
-    for (const mastery of masteryRecords) {
-      if (mastery.bucket in masteryDistribution) {
-        masteryDistribution[
-          mastery.bucket as keyof typeof masteryDistribution
-        ]++;
-      }
-    }
-
-    // Last 7 days
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-    // Get attempts from the last 7 days
     const attempts = await this.prisma.attempt.findMany({
       where: {
-        createdAt: {
-          gte: sevenDaysAgo,
+        studySession: {
+          userId,
         },
+      },
+      include: {
         question: {
-          status: {
-            not: 'retired',
-          },
-          concepts: {
-            some: {
-              concept: {
-                source: {
-                  moduleId,
-                },
-              },
-            },
+          include: {
+            concepts: true,
           },
         },
       },
@@ -85,73 +51,109 @@ export class DashboardService {
       },
     });
 
-    // Overall 7-day accuracy
-    const totalAttempts = attempts.length;
+    const masteryDistribution = {
+      New: 0,
+      Learning: 0,
+      Proficient: 0,
+      Mastered: 0,
+    };
+
+    for (const concept of concepts) {
+      const bucket = concept.mastery?.bucket;
+
+      if (
+        bucket === 'New' ||
+        bucket === 'Learning' ||
+        bucket === 'Proficient' ||
+        bucket === 'Mastered'
+      ) {
+        masteryDistribution[bucket]++;
+      }
+    }
+
+    const totalMastery = concepts.reduce(
+      (sum, concept) => sum + (concept.mastery?.score ?? 0),
+      0,
+    );
+
+    const averageMastery =
+      concepts.length > 0 ? Math.round(totalMastery / concepts.length) : 0;
 
     const correctAttempts = attempts.filter(
-      attempt => attempt.result === 'correct',
+      (attempt) => attempt.result === 'correct',
     ).length;
 
     const accuracy =
-      totalAttempts > 0
-        ? Math.round((correctAttempts / totalAttempts) * 100)
+      attempts.length > 0
+        ? Math.round((correctAttempts / attempts.length) * 100)
         : 0;
 
-    // 7-day accuracy trend
-    const accuracyTrend: {
-      date: string;
-      accuracy: number;
-    }[] = [];
+    const now = new Date();
 
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
 
-      date.setDate(date.getDate() - i);
+    const recentAttempts = attempts.filter(
+      (attempt) => attempt.createdAt >= sevenDaysAgo,
+    );
 
-      const dayStart = new Date(date);
-      dayStart.setHours(0, 0, 0, 0);
+    const accuracyTrend = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(sevenDaysAgo);
 
-      const dayEnd = new Date(date);
-      dayEnd.setHours(23, 59, 59, 999);
+      date.setDate(sevenDaysAgo.getDate() + index);
 
-      const dayAttempts = attempts.filter(
-        attempt =>
-          attempt.createdAt >= dayStart &&
-          attempt.createdAt <= dayEnd,
+      const nextDate = new Date(date);
+      nextDate.setDate(date.getDate() + 1);
+
+      const dayAttempts = recentAttempts.filter(
+        (attempt) => attempt.createdAt >= date && attempt.createdAt < nextDate,
       );
 
       const dayCorrect = dayAttempts.filter(
-        attempt => attempt.result === 'correct',
+        (attempt) => attempt.result === 'correct',
       ).length;
 
-      const dayAccuracy =
-        dayAttempts.length > 0
-          ? Math.round((dayCorrect / dayAttempts.length) * 100)
-          : 0;
+      return {
+        date: date.toISOString().split('T')[0],
+        accuracy:
+          dayAttempts.length > 0
+            ? Math.round((dayCorrect / dayAttempts.length) * 100)
+            : 0,
+        attempts: dayAttempts.length,
+      };
+    });
 
-      accuracyTrend.push({
-        date: dayStart.toISOString().split('T')[0],
-        accuracy: dayAccuracy,
-      });
-    }
-
-    // Top 5 weak concepts
-    const weakConcepts = masteryRecords
+    const weakConcepts = concepts
+      .map((concept) => ({
+        conceptId: concept.id,
+        title: concept.title,
+        score: Math.round(concept.mastery?.score ?? 0),
+        bucket: concept.mastery?.bucket ?? 'New',
+        module: {
+          id: concept.source.module.id,
+          name: concept.source.module.name,
+        },
+        subject: {
+          id: concept.source.module.subject.id,
+          name: concept.source.module.subject.name,
+        },
+      }))
       .sort((a, b) => a.score - b.score)
-      .slice(0, 5)
-      .map(mastery => ({
-        conceptId: mastery.conceptId,
-        title: mastery.concept.title,
-        score: Math.round(mastery.score),
-        bucket: mastery.bucket,
-      }));
+      .slice(0, 5);
 
     return {
-      moduleId,
+      summary: {
+        totalConcepts: concepts.length,
+        averageMastery,
+        totalAttempts: attempts.length,
+        accuracy,
+      },
+
       masteryDistribution,
-      accuracy,
-      totalAttempts,
+
       accuracyTrend,
+
       weakConcepts,
     };
   }

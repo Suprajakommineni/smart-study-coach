@@ -1,19 +1,14 @@
-import {
-  Controller,
-  Get,
-  Param,
-  UseGuards,
-} from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import { MasteryService } from './mastery.service.js';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('mastery')
-@UseGuards(AuthGuard('jwt'))
 export class MasteryController {
-  constructor(private masteryService: MasteryService) {}
+  constructor(private readonly masteryService: MasteryService) {}
 
-  @Get(':conceptId/due-reason')
-  getDueReason(@Param('conceptId') conceptId: string) {
-    return this.masteryService.getDueReason(Number(conceptId));
+  @UseGuards(AuthGuard('jwt'))
+  @Get()
+  async getMyMastery(@Req() req: any) {
+    return this.masteryService.getMasteryForUser(req.user.userId);
   }
 }

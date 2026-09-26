@@ -9,12 +9,15 @@ export class MasteryService {
     private auditLogService: AuditLogService,
   ) {}
 
+  // =========================================================
+  // RECENCY WEIGHT
+  // =========================================================
+
   private getRecencyWeight(createdAt: Date): number {
     const now = new Date();
 
     const ageInDays =
-      (now.getTime() - createdAt.getTime()) /
-      (1000 * 60 * 60 * 24);
+      (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
 
     if (ageInDays <= 1) return 1.0;
     if (ageInDays <= 7) return 0.8;
@@ -23,6 +26,10 @@ export class MasteryService {
     return 0.3;
   }
 
+  // =========================================================
+  // MASTERY BUCKET
+  // =========================================================
+
   private getBucket(score: number): string {
     if (score < 25) return 'New';
     if (score < 50) return 'Learning';
@@ -30,6 +37,10 @@ export class MasteryService {
 
     return 'Mastered';
   }
+
+  // =========================================================
+  // REVIEW INTERVAL
+  // =========================================================
 
   private getReviewInterval(
     score: number,
@@ -49,10 +60,115 @@ export class MasteryService {
     return 5;
   }
 
-  async updateMastery(
-    attemptId: number,
-    masteryId: number,
-  ) {
+  // =========================================================
+  // GET ALL MASTERY FOR LOGGED-IN USER
+  // =========================================================
+
+  async getMasteryForUser(userId: number) {
+    const mastery = await this.prisma.mastery.findMany({
+      where: {
+        concept: {
+          status: 'accepted',
+
+          source: {
+            module: {
+              subject: {
+                workspace: {
+                  userId,
+                },
+              },
+            },
+          },
+        },
+      },
+
+      include: {
+        concept: {
+          select: {
+            id: true,
+            title: true,
+            definition: true,
+            tags: true,
+
+            source: {
+              select: {
+                id: true,
+                module: {
+                  select: {
+                    id: true,
+                    name: true,
+
+                    subject: {
+                      select: {
+                        id: true,
+                        name: true,
+
+                        workspace: {
+                          select: {
+                            id: true,
+                            name: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+
+      orderBy: {
+        score: 'asc',
+      },
+    });
+
+    return mastery.map((item) => ({
+      conceptId: item.conceptId,
+
+      conceptTitle: item.concept.title,
+
+      definition: item.concept.definition,
+
+      tags: item.concept.tags,
+
+      score: Math.round(item.score),
+
+      bucket: item.bucket,
+
+      lastStudiedAt: item.lastStudiedAt,
+
+      nextReviewAt: item.nextReviewAt,
+
+      reviewInterval: item.reviewInterval,
+
+      correctStreak: item.correctStreak,
+
+      incorrectStreak: item.incorrectStreak,
+
+      module: {
+        id: item.concept.source.module.id,
+        name: item.concept.source.module.name,
+      },
+
+      subject: {
+        id: item.concept.source.module.subject.id,
+        name: item.concept.source.module.subject.name,
+      },
+
+      workspace: {
+        id: item.concept.source.module.subject.workspace.id,
+        name: item.concept.source.module.subject.workspace.name,
+      },
+    }));
+  }
+
+  // =========================================================
+  // UPDATE MASTERY
+  // =========================================================
+
+  async updateMastery(attemptId: number, masteryId: number) {
     const attempt = await this.prisma.attempt.findUnique({
       where: {
         id: attemptId,
@@ -75,9 +191,7 @@ export class MasteryService {
 
     const beforeMastery = mastery;
 
-    const weight = this.getRecencyWeight(
-      attempt.createdAt,
-    );
+    const weight = this.getRecencyWeight(attempt.createdAt);
 
     let newScore = mastery.score;
 
@@ -105,10 +219,7 @@ export class MasteryService {
       incorrectStreak = 0;
     }
 
-    newScore = Math.max(
-      0,
-      Math.min(100, newScore),
-    );
+    newScore = Math.max(0, Math.min(100, newScore));
 
     const bucket = this.getBucket(newScore);
 
@@ -122,25 +233,23 @@ export class MasteryService {
 
     const nextReviewAt = new Date();
 
-    nextReviewAt.setDate(
-      nextReviewAt.getDate() + reviewInterval,
-    );
+    nextReviewAt.setDate(nextReviewAt.getDate() + reviewInterval);
 
-    const updatedMastery =
-      await this.prisma.mastery.update({
-        where: {
-          id: masteryId,
-        },
-        data: {
-          score: newScore,
-          bucket,
-          correctStreak,
-          incorrectStreak,
-          reviewInterval,
-          lastStudiedAt,
-          nextReviewAt,
-        },
-      });
+    const updatedMastery = await this.prisma.mastery.update({
+      where: {
+        id: masteryId,
+      },
+
+      data: {
+        score: newScore,
+        bucket,
+        correctStreak,
+        incorrectStreak,
+        reviewInterval,
+        lastStudiedAt,
+        nextReviewAt,
+      },
+    });
 
     await this.auditLogService.createLog(
       null,
@@ -154,9 +263,11 @@ export class MasteryService {
     return updatedMastery;
   }
 
-  async recalculateMastery(
-    conceptId: number,
-  ) {
+  // =========================================================
+  // RECALCULATE MASTERY
+  // =========================================================
+
+  async recalculateMastery(conceptId: number) {
     const mastery = await this.prisma.mastery.findUnique({
       where: {
         conceptId,
@@ -167,21 +278,21 @@ export class MasteryService {
       throw new Error('Mastery record not found');
     }
 
-    const attempts =
-      await this.prisma.attempt.findMany({
-        where: {
-          question: {
-            concepts: {
-              some: {
-                conceptId,
-              },
+    const attempts = await this.prisma.attempt.findMany({
+      where: {
+        question: {
+          concepts: {
+            some: {
+              conceptId,
             },
           },
         },
-        orderBy: {
-          createdAt: 'asc',
-        },
-      });
+      },
+
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
 
     let score = 0;
 
@@ -189,9 +300,7 @@ export class MasteryService {
     let incorrectStreak = 0;
 
     for (const attempt of attempts) {
-      const weight = this.getRecencyWeight(
-        attempt.createdAt,
-      );
+      const weight = this.getRecencyWeight(attempt.createdAt);
 
       if (attempt.result === 'correct') {
         score += 10 * weight;
@@ -209,12 +318,9 @@ export class MasteryService {
         correctStreak = 0;
         incorrectStreak = 0;
       }
-    }
 
-    score = Math.max(
-      0,
-      Math.min(100, score),
-    );
+      score = Math.max(0, Math.min(100, score));
+    }
 
     const bucket = this.getBucket(score);
 
@@ -224,35 +330,31 @@ export class MasteryService {
       incorrectStreak,
     );
 
-    const lastAttempt =
-      attempts[attempts.length - 1];
+    const lastAttempt = attempts[attempts.length - 1];
 
-    const lastStudiedAt =
-      lastAttempt?.createdAt ?? null;
+    const lastStudiedAt = lastAttempt?.createdAt ?? null;
 
-    const nextReviewAt = new Date();
-
-    nextReviewAt.setDate(
-      nextReviewAt.getDate() + reviewInterval,
-    );
+    const nextReviewAt = lastStudiedAt
+      ? new Date(lastStudiedAt.getTime() + reviewInterval * 24 * 60 * 60 * 1000)
+      : null;
 
     const beforeMastery = mastery;
 
-    const updatedMastery =
-      await this.prisma.mastery.update({
-        where: {
-          conceptId,
-        },
-        data: {
-          score,
-          bucket,
-          correctStreak,
-          incorrectStreak,
-          reviewInterval,
-          lastStudiedAt,
-          nextReviewAt,
-        },
-      });
+    const updatedMastery = await this.prisma.mastery.update({
+      where: {
+        conceptId,
+      },
+
+      data: {
+        score,
+        bucket,
+        correctStreak,
+        incorrectStreak,
+        reviewInterval,
+        lastStudiedAt,
+        nextReviewAt,
+      },
+    });
 
     await this.auditLogService.createLog(
       null,
@@ -265,67 +367,76 @@ export class MasteryService {
 
     return updatedMastery;
   }
+
+  // =========================================================
+  // WHY IS THIS DUE?
+  // =========================================================
+
   async getDueReason(conceptId: number) {
-  const mastery = await this.prisma.mastery.findUnique({
-    where: {
-      conceptId,
-    },
-  });
+    const mastery = await this.prisma.mastery.findUnique({
+      where: {
+        conceptId,
+      },
+    });
 
-  if (!mastery) {
-    throw new Error('Mastery record not found');
-  }
+    if (!mastery) {
+      throw new Error('Mastery record not found');
+    }
 
-  const reasons: string[] = [];
+    const reasons: string[] = [];
 
-  // Never studied
-  if (!mastery.lastStudiedAt) {
-    reasons.push('This concept has not been studied yet');
-  } else {
-    const now = new Date();
+    // Never studied
+    if (!mastery.lastStudiedAt) {
+      reasons.push('This concept has not been studied yet');
+    } else {
+      const now = new Date();
 
-    const daysSinceLastStudy = Math.floor(
-      (now.getTime() - mastery.lastStudiedAt.getTime()) /
-        (1000 * 60 * 60 * 24),
-    );
+      const daysSinceLastStudy = Math.floor(
+        (now.getTime() - mastery.lastStudiedAt.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
 
-    if (daysSinceLastStudy > 0) {
+      if (daysSinceLastStudy > 0) {
+        reasons.push(
+          `${daysSinceLastStudy} day${
+            daysSinceLastStudy === 1 ? '' : 's'
+          } since last review`,
+        );
+      }
+    }
+
+    reasons.push(`mastery ${Math.round(mastery.score)}`);
+
+    if (mastery.incorrectStreak > 0) {
       reasons.push(
-        `${daysSinceLastStudy} day${
-          daysSinceLastStudy === 1 ? '' : 's'
-        } since last review`,
+        `${mastery.incorrectStreak} incorrect attempt${
+          mastery.incorrectStreak === 1 ? '' : 's'
+        } recently`,
       );
     }
+
+    if (mastery.correctStreak > 0) {
+      reasons.push(
+        `${mastery.correctStreak} correct attempt${
+          mastery.correctStreak === 1 ? '' : 's'
+        } streak`,
+      );
+    }
+
+    return {
+      conceptId,
+
+      bucket: mastery.bucket,
+
+      score: mastery.score,
+
+      lastStudiedAt: mastery.lastStudiedAt,
+
+      nextReviewAt: mastery.nextReviewAt,
+
+      reviewInterval: mastery.reviewInterval,
+
+      reason: reasons.join(' + '),
+    };
   }
-
-  reasons.push(
-    `mastery ${Math.round(mastery.score)}`,
-  );
-
-  if (mastery.incorrectStreak > 0) {
-    reasons.push(
-      `${mastery.incorrectStreak} incorrect attempt${
-        mastery.incorrectStreak === 1 ? '' : 's'
-      } recently`,
-    );
-  }
-
-  if (mastery.correctStreak > 0) {
-    reasons.push(
-      `${mastery.correctStreak} correct attempt${
-        mastery.correctStreak === 1 ? '' : 's'
-      } streak`,
-    );
-  }
-
-  return {
-    conceptId,
-    bucket: mastery.bucket,
-    score: mastery.score,
-    lastStudiedAt: mastery.lastStudiedAt,
-    nextReviewAt: mastery.nextReviewAt,
-    reviewInterval: mastery.reviewInterval,
-    reason: reasons.join(' + '),
-  };
-}
 }
