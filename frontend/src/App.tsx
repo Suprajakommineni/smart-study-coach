@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
 import Register from "./pages/Register";
 import Login from "./pages/Login";
@@ -24,6 +24,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         {/* Public */}
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route element={<PublicOnlyRoute />}>
           <Route path="/register" element={<Register />} />
           <Route path="/login" element={<Login />} />
@@ -34,49 +35,46 @@ export default function App() {
           <Route element={<Dashboardlayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
 
-            {/* Workspace */}
+           
             <Route
               path="/workspaces"
               element={<Workspace />}
             />
 
-            {/* Subjects */}
+            
             <Route
               path="/workspaces/:workspaceId/subjects"
               element={<Subject />}
             />
 
-            {/* Modules */}
+            
             <Route
               path="/workspaces/:workspaceId/subjects/:subjectId/modules"
               element={<Module />}
             />
 
-            {/* Sources */}
+            
             <Route
               path="/workspaces/:workspaceId/subjects/:subjectId/modules/:moduleId/sources"
               element={<Sources />}
             />
 
-            {/* Concepts */}
             <Route
               path="/workspaces/:workspaceId/subjects/:subjectId/modules/:moduleId/sources/:sourceId/concepts"
               element={<ConceptReview />}
             />
 
-            {/* Question Bank */}
             <Route
               path="/modules/:moduleId/questions"
               element={<QuestionBank />}
             />
 
-            {/* Study Session */}
+            
             <Route
               path="/modules/:moduleId/study-session"
               element={<StudySession />}
             />
 
-            {/* Other */}
             <Route path="/mastery" element={<Mastery />} />
 
             <Route
