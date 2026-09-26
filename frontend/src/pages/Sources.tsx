@@ -334,8 +334,8 @@ export default function Sources() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 gap-4">
-                  <div className="rounded-xl bg-violet-50 p-3 text-violet-600">
-                    <FileText size={20} />
+                  <div className="w-14 h-14 shrink-0 rounded-xl bg-purple-100 flex items-center justify-center self-start">
+                    <FileText className="w-6 h-6 text-purple-600" />
                   </div>
 
                   <div className="min-w-0">
