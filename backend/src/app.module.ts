@@ -15,10 +15,10 @@ import { AuditLogModule } from './audit-log/audit-log.module.js';
 import { SearchService } from './search/search.service.js';
 import { SearchModule } from './search/search.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
-
+import { PrismaModule } from "./prisma/prisma.module.js";
 
 @Module({
-  imports: [AuthModule, WorkspaceModule, SubjectModule, ModuleModule, SourceModule, ConceptModule, QuestionModule, StudySessionModule, MasteryModule, AuditLogModule, SearchModule, DashboardModule],
+  imports: [PrismaModule, AuthModule, WorkspaceModule, SubjectModule, ModuleModule, SourceModule, ConceptModule, QuestionModule, StudySessionModule, MasteryModule, AuditLogModule, SearchModule, DashboardModule],
   controllers: [AppController],
   providers: [AppService, PrismaService, SearchService ],
 })

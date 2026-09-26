@@ -2,9 +2,9 @@
 import { Module } from "@nestjs/common";
 import { AuthService } from "./auth.service.js";
 import { AuthController } from "./auth.controller.js";
-import { PrismaService } from "../prisma/prisma.service.js";
 import { JwtModule } from "@nestjs/jwt";
 import { JwtStrategy } from "./jwt.strategy.js";
+import { PrismaModule } from "../prisma/prisma.module.js";
 
 const jwtSecret = process.env.JWT_SECRET;
 
@@ -19,11 +19,10 @@ if (!jwtSecret) {
       signOptions: {
         expiresIn: "1d",
       },
-    }),
+    }), PrismaModule
   ],
   providers: [
     AuthService,
-    PrismaService,
     JwtStrategy,
   ],
   controllers: [AuthController],
