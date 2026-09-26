@@ -125,35 +125,43 @@ Important:
 - Every question must be different.
 - Do not repeat the same question with different wording.
 - Questions must test different aspects of the concept.
+- Return exactly 10 questions.
+- Do not include any text outside the JSON object.
 
 Respond ONLY with valid JSON.
 
 Format:
 
-[
-  {
-    "type": "mcq",
-    "text": "...",
-    "answer": "...",
-    "choices": ["...", "...", "...", "..."],
-    "difficulty": 2
-  },
-  {
-    "type": "true_false",
-    "text": "...",
-    "answer": "True",
-    "choices": ["True", "False"],
-    "difficulty": 1
-  },
-  {
-    "type": "short_answer",
-    "text": "...",
-    "answer": "...",
-    "choices": null,
-    "difficulty": 3
-  }
-]
+{
+  "questions": [
+    {
+      "type": "mcq",
+      "text": "...",
+      "answer": "...",
+      "choices": ["...", "...", "...", "..."],
+      "difficulty": 2
+    },
+    {
+      "type": "true_false",
+      "text": "...",
+      "answer": "True",
+      "choices": ["True", "False"],
+      "difficulty": 1
+    },
+    {
+      "type": "short_answer",
+      "text": "...",
+      "answer": "...",
+      "choices": null,
+      "difficulty": 3
+    }
+  ]
+}
 `;
+
+        // =====================================================
+        // GROQ AI GENERATION
+        // =====================================================
 
         const completion = await this.groq.chat.completions.create({
           model: 'openai/gpt-oss-20b',
@@ -164,22 +172,39 @@ Format:
             },
           ],
           temperature: 0.2,
+          response_format: {
+            type: 'json_object',
+          },
         });
 
         const responseText = completion.choices[0]?.message?.content ?? '';
 
         const cleanedText = responseText.replace(/```json|```/g, '').trim();
 
-        const aiQuestions = JSON.parse(cleanedText);
+        if (!cleanedText) {
+          throw new Error('AI returned an empty response');
+        }
+
+        // =====================================================
+        // PARSE AI RESPONSE
+        // =====================================================
+
+        const parsed = JSON.parse(cleanedText);
+
+        const aiQuestions = parsed.questions;
 
         if (!Array.isArray(aiQuestions)) {
-          throw new Error('AI did not return an array');
+          throw new Error('AI did not return a questions array');
         }
+
+        // =====================================================
+        // SAVE AI RUN
+        // =====================================================
 
         const aiRun = await this.prisma.aiRun.create({
           data: {
             model: 'openai/gpt-oss-20b',
-            promptVersion: 'question-generator-v2',
+            promptVersion: 'question-generator-v3',
             input: prompt,
             output: cleanedText,
           },
@@ -189,6 +214,10 @@ Format:
 
         // Prevent duplicate question text from being stored.
         const seenQuestions = new Set<string>();
+
+        // =====================================================
+        // SAVE QUESTIONS
+        // =====================================================
 
         for (const q of aiQuestions) {
           if (!q || !['mcq', 'true_false', 'short_answer'].includes(q.type)) {
@@ -212,17 +241,29 @@ Format:
 
           let choices: string[] | null = null;
 
+          // ===================================================
+          // MCQ
+          // ===================================================
+
           if (q.type === 'mcq') {
             if (!Array.isArray(q.choices) || q.choices.length !== 4) {
               continue;
             }
 
-            choices = q.choices.map((choice: unknown) => String(choice).trim());
+            const mcqChoices = q.choices.map((choice: unknown) =>
+              String(choice).trim(),
+            );
 
-            if (!choices || !choices.includes(String(q.answer).trim())) {
+            if (!mcqChoices.includes(String(q.answer).trim())) {
               continue;
             }
+
+            choices = mcqChoices;
           }
+
+          // ===================================================
+          // TRUE / FALSE
+          // ===================================================
 
           if (q.type === 'true_false') {
             choices = ['True', 'False'];
@@ -232,6 +273,10 @@ Format:
             }
           }
 
+          // ===================================================
+          // SHORT ANSWER
+          // ===================================================
+
           if (q.type === 'short_answer') {
             choices = null;
           }
@@ -240,6 +285,10 @@ Format:
             5,
             Math.max(1, Number(q.difficulty) || 2),
           );
+
+          // ===================================================
+          // CREATE QUESTION
+          // ===================================================
 
           const question = await this.prisma.question.create({
             data: {
@@ -253,12 +302,20 @@ Format:
             },
           });
 
+          // ===================================================
+          // LINK QUESTION TO CONCEPT
+          // ===================================================
+
           await this.prisma.questionConcept.create({
             data: {
               questionId: question.id,
               conceptId: concept.id,
             },
           });
+
+          // ===================================================
+          // CREATE QUESTION VERSION
+          // ===================================================
 
           await this.prisma.questionVersion.create({
             data: {
@@ -274,6 +331,10 @@ Format:
           allNewQuestions.push(question);
           generatedQuestionIds.push(question.id);
         }
+
+        // =====================================================
+        // AUDIT LOG
+        // =====================================================
 
         await this.auditLogService.createLog(
           userId,
