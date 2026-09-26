@@ -183,23 +183,39 @@ const ConceptReview = () => {
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Review Concepts</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Review Concepts
+          </h1>
 
           <p className="mt-1 text-sm text-gray-500">
             Review and manage concepts extracted from this source.
           </p>
         </div>
 
-        <Button
-          variant="outline"
-          onClick={() =>
-            navigate(
-              `/workspaces/${workspaceId}/subjects/${subjectId}/modules/${moduleId}/sources`,
-            )
-          }
-        >
-          Back to Sources
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {/* ADDED: Go to Module button */}
+          <Button
+            variant="outline"
+            onClick={() =>
+              navigate(
+                `/workspaces/${workspaceId}/subjects/${subjectId}/modules/${moduleId}`,
+              )
+            }
+          >
+            Go to Module
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() =>
+              navigate(
+                `/workspaces/${workspaceId}/subjects/${subjectId}/modules/${moduleId}/sources`,
+              )
+            }
+          >
+            Back to Sources
+          </Button>
+        </div>
       </div>
 
       {loading && <p className="text-sm text-gray-500">Loading...</p>}
