@@ -47,11 +47,15 @@ export default function App() {
               element={<Subject />}
             />
 
-            
             <Route
-              path="/workspaces/:workspaceId/subjects/:subjectId/modules"
-              element={<Module />}
-            />
+  path="/workspaces/:workspaceId/subjects/:subjectId/modules"
+  element={<Module />}
+/>
+
+<Route
+  path="/workspaces/:workspaceId/subjects/:subjectId/modules/:moduleId"
+  element={<Module />}
+/>
 
             
             <Route
