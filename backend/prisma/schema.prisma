@@ -1,5 +1,7 @@
+
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-1.0.x"]
 }
 
 datasource db {
@@ -12,6 +14,7 @@ model User {
   email         String         @unique
   password      String
   createdAt     DateTime       @default(now())
+
   workspaces    Workspace[]
   auditLogs     AuditLog[]
   studySessions StudySession[]
@@ -25,6 +28,7 @@ model Workspace {
   userId      Int
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
   user        User      @relation(fields: [userId], references: [id])
   subjects    Subject[]
 }
@@ -37,6 +41,7 @@ model Subject {
   workspaceId Int
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
   modules     Module[]
 }
@@ -49,6 +54,7 @@ model Module {
   subjectId     Int
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+
   subject       Subject        @relation(fields: [subjectId], references: [id])
   sources       Source[]
   studySessions StudySession[]
@@ -58,15 +64,14 @@ model Source {
   id         Int      @id @default(autoincrement())
   moduleId   Int
   text       String   @db.Text
-  sourceType String   @default("paste")
   status     String   @default("draft")
   version    Int      @default(1)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  module   Module          @relation(fields: [moduleId], references: [id])
-  concepts Concept[]
-  versions SourceVersion[]
+  module     Module          @relation(fields: [moduleId], references: [id])
+  concepts   Concept[]
+  versions   SourceVersion[]
 }
 
 model SourceVersion {
@@ -76,7 +81,7 @@ model SourceVersion {
   text      String   @db.Text
   createdAt DateTime @default(now())
 
-  source Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  source    Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 
   @@unique([sourceId, version])
 }
@@ -92,39 +97,39 @@ model Concept {
   status        String   @default("suggested")
   snippet       String?  @db.Text
   aiRunId       Int?
-  aiRun         AiRun?   @relation(fields: [aiRunId], references: [id])
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  source    Source            @relation(fields: [sourceId], references: [id])
-  questions QuestionConcept[]
-  mastery   Mastery?
+  source        Source            @relation(fields: [sourceId], references: [id])
+  aiRun         AiRun?            @relation(fields: [aiRunId], references: [id])
+  questions     QuestionConcept[]
+  mastery       Mastery?
 }
 
 model Question {
-  id   Int    @id @default(autoincrement())
-  type String
+  id          Int      @id @default(autoincrement())
+  type        String
+  text        String   @db.Text
+  difficulty  Int
+  status      String   @default("generated")
+  answer      String   @db.Text
+  choices     String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  aiRunId     Int?
 
-  text       String            @db.Text
-  difficulty Int
-  status     String            @default("generated")
-  answer     String            @db.Text
-  choices    String?           @db.Text
-  createdAt  DateTime          @default(now())
-  updatedAt  DateTime          @updatedAt
-  attempts   Attempt[]
-  concepts   QuestionConcept[]
-  versions   QuestionVersion[]
-  aiRunId    Int?
-  aiRun      AiRun?            @relation(fields: [aiRunId], references: [id])
+  attempts    Attempt[]
+  concepts    QuestionConcept[]
+  versions    QuestionVersion[]
+  aiRun       AiRun?   @relation(fields: [aiRunId], references: [id])
 }
 
 model QuestionConcept {
   questionId Int
   conceptId  Int
 
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  concept  Concept  @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  concept    Concept  @relation(fields: [conceptId], references: [id], onDelete: Cascade)
 
   @@id([questionId, conceptId])
 }
@@ -137,9 +142,9 @@ model StudySession {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id])
-  module   Module    @relation(fields: [moduleId], references: [id])
-  attempts Attempt[]
+  user          User      @relation(fields: [userId], references: [id])
+  module        Module    @relation(fields: [moduleId], references: [id])
+  attempts      Attempt[]
 }
 
 model Attempt {
@@ -148,26 +153,25 @@ model Attempt {
   questionId        Int
   questionVersionId Int
 
-  studySession    StudySession    @relation(fields: [studySessionId], references: [id])
-  question        Question        @relation(fields: [questionId], references: [id])
-  questionVersion QuestionVersion @relation(fields: [questionVersionId], references: [id])
+  answer            String   @db.Text
+  result            String
 
-  answer String @db.Text
-  result String
+  aiRunId           Int?
+  aiRationale       String?  @db.Text
+  aiConfidence      Float?
 
-  aiRunId      Int?
-  aiRun        AiRun? @relation(fields: [aiRunId], references: [id])
-  aiResult     String?
-  aiRationale  String? @db.Text
-  aiConfidence Float?
+  userOverride      String?
+  overrideReason    String?  @db.Text
+  overriddenAt      DateTime?
 
-  userOverride   String?
-  overrideReason String? @db.Text
-  overriddenAt   DateTime?
+  timeTaken         Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  timeTaken Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  studySession      StudySession    @relation(fields: [studySessionId], references: [id])
+  question          Question        @relation(fields: [questionId], references: [id])
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id])
+  aiRun             AiRun?          @relation(fields: [aiRunId], references: [id])
 }
 
 model Mastery {
@@ -183,21 +187,21 @@ model Mastery {
   updatedAt       DateTime  @updatedAt
   createdAt       DateTime  @default(now())
 
-  concept Concept @relation(fields: [conceptId], references: [id], onDelete: Cascade)
+  concept         Concept   @relation(fields: [conceptId], references: [id], onDelete: Cascade)
 }
 
 model QuestionVersion {
-  id         Int      @id @default(autoincrement())
-  questionId Int
-  version    Int
-  text       String   @db.Text
-  answer     String   @db.Text
-  choices    String?  @db.Text
-  difficulty Int
-  createdAt  DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  questionId  Int
+  version     Int
+  text        String   @db.Text
+  answer      String   @db.Text
+  choices     String?  @db.Text
+  difficulty  Int
+  createdAt   DateTime @default(now())
 
-  question Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  attempts Attempt[]
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  attempts    Attempt[]
 
   @@unique([questionId, version])
 }
@@ -210,20 +214,20 @@ model AiRun {
   output        String   @db.Text
   createdAt     DateTime @default(now())
 
-  concepts  Concept[]
-  questions Question[]
-  attempts  Attempt[]
+  concepts      Concept[]
+  questions     Question[]
+  attempts      Attempt[]
 }
 
 model AuditLog {
-  id         Int      @id @default(autoincrement())
-  userId     Int?
-  action     String
-  entityType String
-  entityId   Int
-  beforeData String?  @db.Text
-  afterData  String?  @db.Text
-  createdAt  DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  action      String
+  entityType  String
+  entityId    Int
+  beforeData  String?  @db.Text
+  afterData   String?  @db.Text
+  createdAt   DateTime @default(now())
 
-  user User? @relation(fields: [userId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id])
 }
