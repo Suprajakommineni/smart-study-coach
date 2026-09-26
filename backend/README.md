@@ -1,124 +1,419 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Smart Study Coach
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A full-stack study application that turns pasted notes into AI-generated concepts and quiz questions, with review gating, mastery tracking, and spaced review.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Tech Stack
 
-## Description
+- **Frontend:** React + TypeScript + Tailwind CSS + shadcn/ui
+- **Backend:** NestJS + TypeScript
+- **Database:** MySQL + Prisma
+- **AI:** Groq
+- **Authentication:** JWT + bcrypt
+- **Frontend Hosting:** Vercel
+- **Backend Hosting:** Back4app Containers
+- **Database Hosting:** Aiven MySQL
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+---
 
-## Project setup
+## Project Setup
+
+### 1. Backend Setup
+
+Navigate to the backend:
 
 ```bash
-$ npm install
+cd backend
+npm install
 ```
 
-## Compile and run the project
+Create a `.env` file inside the `backend` folder:
+
+```env
+DATABASE_URL="mysql://user:password@host:port/dbname?ssl-mode=REQUIRED"
+GROQ_API_KEY="your-groq-key"
+FRONTEND_URL="http://localhost:5173"
+PORT=3000
+```
+
+Run database migrations:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npx prisma migrate deploy
 ```
 
-## Run tests
+Generate Prisma Client:
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npx prisma generate
 ```
+
+Start the backend in development mode:
+
+```bash
+npm run start:dev
+```
+
+The backend will run on:
+
+```text
+http://localhost:3000
+```
+
+### 2. Frontend Setup
+
+Open another terminal and navigate to the frontend:
+
+```bash
+cd frontend
+npm install
+```
+
+Create a `.env` file inside the `frontend` folder:
+
+```env
+VITE_API_URL="http://localhost:3000"
+```
+
+Start the frontend:
+
+```bash
+npm run dev
+```
+
+The frontend will run on:
+
+```text
+http://localhost:5173
+```
+
+---
+
+## Database Schema & Migrations
+
+The Prisma schema is located at:
+
+```text
+backend/prisma/schema.prisma
+```
+
+Database migrations are located at:
+
+```text
+backend/prisma/migrations/
+```
+
+### Main Entity Relationship
+
+```text
+User
+  ↓
+Workspace
+  ↓
+Subject
+  ↓
+Module
+  ↓
+Source
+  ↓
+Concept
+  ↓
+Question
+  ↓
+StudySession
+  ↓
+Attempt
+```
+
+### Additional Entities
+
+The application also contains:
+
+- `Mastery`
+- `SourceVersion`
+- `QuestionVersion`
+- `AiRun`
+- `AuditLog`
+- `QuestionConcept`
+
+These entities support mastery tracking, version history, AI provenance, auditing, and concept-question relationships.
+
+---
+
+## Mastery & Spacing Algorithm
+
+Each concept has a mastery score from **0 to 100**.
+
+### Mastery Updates
+
+```text
+Correct answer   → Mastery increases
+Incorrect answer → Mastery decreases
+```
+
+The mastery score is always clamped between `0` and `100`.
+
+### Mastery Levels
+
+| Score | Level |
+|------:|-------|
+| 0–24 | New |
+| 25–49 | Learning |
+| 50–79 | Proficient |
+| 80–100 | Mastered |
+
+### Review Intervals
+
+| Mastery Level | Review Interval |
+|---|---|
+| New / Learning | 1 day |
+| Proficient | 3 days |
+| Mastered | 7 days |
+
+If the latest attempt is incorrect, the concept becomes due for review the next day.
+
+The scheduler is deterministic and uses:
+
+- Mastery score
+- Attempt history
+- Previous review date
+- Current date
+
+No random scheduling is used.
+
+---
+
+## Deduplication & Idempotency Strategy
+
+The application uses different strategies for generated questions, source processing, and concept merging.
+
+### Question Generation
+
+When questions are regenerated:
+
+1. Existing `generated` questions are removed.
+2. New generated questions replace them.
+3. `user-edited` questions are preserved.
+
+This prevents duplicate generated questions while protecting questions that were manually modified by the user.
+
+### Source Re-processing
+
+When a source is processed again:
+
+1. A new source version is created.
+2. The previous source version remains available.
+3. Existing concepts can be marked as `outdated`.
+4. Processing history is preserved.
+
+This allows the system to keep track of changes to the original study material.
+
+### Concept Merging
+
+When two concepts are merged:
+
+1. Facts from both concepts are combined.
+2. Related questions are reassigned to the surviving concept.
+3. Mastery is recalculated using the combined attempt history.
+4. The merged concept is marked as `merged` instead of being permanently deleted.
+
+---
+
+## Provenance
+
+AI-generated content stores information that allows it to be traced back to the original study material.
+
+### Provenance Information
+
+Generated concepts can contain:
+
+```text
+sourceId
+sourceVersion
+snippet
+aiRunId
+```
+
+The `AiRun` entity records information such as:
+
+- AI model
+- Prompt version
+- Input
+- Output
+
+This makes it possible to trace generated concepts and questions back to their source material and AI generation run.
+
+---
+
+## AI Safety Constraints
+
+The AI generation process is designed to keep generated content grounded in the student's supplied study material.
+
+### Input
+
+The AI receives the student's supplied study content as its source material.
+
+### Structured Output
+
+AI responses are expected to follow a fixed JSON structure.
+
+#### Concept Structure
+
+```text
+title
+definition
+facts
+```
+
+#### Question Structure
+
+```text
+question
+answer
+choices
+```
+
+### Validation
+
+AI responses are:
+
+1. Parsed.
+2. Validated against the expected structure.
+3. Checked before being stored.
+
+Malformed or unexpected AI responses are not stored directly.
+
+---
+
+## Key Tradeoffs & Limitations
+
+### AI Provider
+
+The project initially used Gemini and was later switched to Groq because of availability issues.
+
+The AI integration is isolated so another AI provider can be added later without changing the rest of the application significantly.
+
+### Question Grading
+
+Multiple-choice and true/false questions can be graded deterministically.
+
+Free-text answer grading is not fully automated and requires review.
+
+### PDF & Image Processing
+
+PDF/image uploads currently store metadata.
+
+OCR and automatic text extraction are not implemented.
+
+### Concept Facts
+
+Concept facts are stored as JSON instead of separate database records because the number of facts per concept is small and bounded.
+
+### Hosting
+
+The application uses free-tier hosting services and is intended primarily for demonstration and evaluation rather than production-scale workloads.
+
+---
+
+## Demo Dataset
+
+For quick evaluation, create a workspace, subject, module, and source using sample content such as:
+
+> Mitosis is the process of cell division that produces two identical daughter cells. It occurs in four phases: prophase, metaphase, anaphase, and telophase. During prophase, chromosomes condense and become visible.
+
+This sample can be used to test:
+
+- Source creation
+- AI concept generation
+- Question generation
+- Review gating
+- Mastery tracking
+- Spaced review
+
+---
+
+## Project Structure
+
+```text
+smart-study-coach/
+│
+├── README.md
+│
+├── backend/
+│   ├── prisma/
+│   │   ├── migrations/
+│   │   └── schema.prisma
+│   │
+│   └── src/
+│       ├── auth/
+│       ├── workspace/
+│       ├── subject/
+│       ├── module/
+│       ├── source/
+│       ├── concept/
+│       ├── question/
+│       ├── mastery/
+│       ├── study-session/
+│       └── ...
+│
+└── frontend/
+    └── src/
+        ├── components/
+        ├── pages/
+        ├── contexts/
+        └── ...
+```
+
+---
+
+## Environment Variables
+
+The following environment variables are required.
+
+### Backend
+
+```env
+DATABASE_URL="your-mysql-database-url"
+GROQ_API_KEY="your-groq-api-key"
+FRONTEND_URL="your-frontend-url"
+PORT=3000
+```
+
+### Frontend
+
+```env
+VITE_API_URL="your-backend-api-url"
+```
+
+Do not commit `.env` files or secret API keys to the repository.
+
+---
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+### Frontend
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+The frontend is deployed using **Vercel**.
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+### Backend
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+The NestJS backend is deployed using **Back4app Containers**.
 
-## Observability
+### Database
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
+The MySQL database is hosted using **Aiven**.
 
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
+---
 
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
+## Authentication
 
-To add it to this project:
+The application uses JWT-based authentication.
 
-```bash
-$ npm install @nestjs/observe
-```
+Passwords are hashed using bcrypt before being stored.
 
-Then follow the [setup guide](https://docs.nestjs.com/observability/overview) - it takes a single import and an app key.
+Protected API routes require a valid JWT token.
 
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+---
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+This project is developed as a study and evaluation project.
