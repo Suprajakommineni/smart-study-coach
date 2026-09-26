@@ -20,450 +20,520 @@ export class QuestionService {
     });
   }
 
-async generateQuestions(moduleId: number, userId: number) {
-  const module = await this.prisma.module.findFirst({
-    where: {
-      id: moduleId,
-      subject: {
-        workspace: {
-          userId,
+  // =========================================================
+  // GENERATE 15 QUESTIONS FOR THE WHOLE MODULE
+  // =========================================================
+
+  async generateQuestions(moduleId: number, userId: number) {
+    const module = await this.prisma.module.findFirst({
+      where: {
+        id: moduleId,
+        subject: {
+          workspace: {
+            userId,
+          },
         },
       },
-    },
-  });
+    });
 
-  if (!module) {
-    throw new NotFoundException('Module not found');
-  }
+    if (!module) {
+      throw new NotFoundException('Module not found');
+    }
 
-  // =======================================================
-  // GET ACCEPTED CONCEPTS
-  // =======================================================
+    // =======================================================
+    // GET ACCEPTED CONCEPTS
+    // =======================================================
 
-  const acceptedConcepts = await this.prisma.concept.findMany({
-    where: {
-      status: 'accepted',
-      source: {
-        moduleId,
+    const acceptedConcepts = await this.prisma.concept.findMany({
+      where: {
+        status: 'accepted',
+        source: {
+          moduleId,
+        },
       },
-    },
-    select: {
-      id: true,
-      title: true,
-      definition: true,
-    },
-  });
+      select: {
+        id: true,
+        title: true,
+        definition: true,
+      },
+    });
 
-  if (acceptedConcepts.length === 0) {
-    throw new BadRequestException(
-      'No accepted concepts found for this module. Please accept at least one concept before generating questions.',
-    );
-  }
+    if (acceptedConcepts.length === 0) {
+      throw new BadRequestException(
+        'No accepted concepts found for this module. Please accept at least one concept before generating questions.',
+      );
+    }
 
-  // =======================================================
-  // RETIRE OLD AI-GENERATED QUESTIONS
-  // =======================================================
+    // =======================================================
+    // RETIRE OLD AI-GENERATED QUESTIONS
+    // =======================================================
 
-  const oldGeneratedQuestions = await this.prisma.question.findMany({
-    where: {
-      status: 'generated',
-      concepts: {
-        some: {
-          concept: {
-            source: {
-              moduleId,
+    const oldGeneratedQuestions = await this.prisma.question.findMany({
+      where: {
+        status: 'generated',
+        concepts: {
+          some: {
+            concept: {
+              source: {
+                moduleId,
+              },
             },
           },
         },
       },
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  const oldQuestionIds = oldGeneratedQuestions.map(
-    (question) => question.id,
-  );
-
-  if (oldQuestionIds.length > 0) {
-    await this.prisma.question.updateMany({
-      where: {
-        id: {
-          in: oldQuestionIds,
-        },
-        status: 'generated',
-      },
-      data: {
-        status: 'retired',
+      select: {
+        id: true,
       },
     });
-  }
 
-  // =======================================================
-  // CONCEPT LIST
-  // =======================================================
+    const oldQuestionIds = oldGeneratedQuestions.map(
+      (question) => question.id,
+    );
 
-  const conceptList = acceptedConcepts
-    .map(
-      (concept) => `
+    if (oldQuestionIds.length > 0) {
+      await this.prisma.question.updateMany({
+        where: {
+          id: {
+            in: oldQuestionIds,
+          },
+          status: 'generated',
+        },
+        data: {
+          status: 'retired',
+        },
+      });
+    }
+
+    // =======================================================
+    // PREPARE CONCEPT INFORMATION FOR AI
+    // =======================================================
+
+    const conceptList = acceptedConcepts
+      .map(
+        (concept) => `
 Concept ID: ${concept.id}
 Title: ${concept.title}
 Definition: ${concept.definition}`,
-    )
-    .join('\n');
+      )
+      .join('\n');
 
-  // =======================================================
-  // PROMPT
-  // =======================================================
+    // =======================================================
+    // PROMPT
+    // =======================================================
 
-  const prompt = `
-Generate exactly 15 quiz questions for this study module.
-
-There are multiple accepted concepts in this module.
-
-IMPORTANT:
-- Generate exactly 15 questions TOTAL.
-- Do NOT generate 15 questions per concept.
-- Cover the accepted concepts as evenly as possible.
-- Every question must contain a conceptId.
-- conceptId must be one of the IDs provided below.
-- Do not invent concept IDs.
+    const prompt = `
+Generate exactly 15 quiz questions for the study module below.
 
 ACCEPTED CONCEPTS:
 
 ${conceptList}
 
-QUESTION DISTRIBUTION:
+REQUIREMENTS:
 
-- 6 multiple choice questions
-- 5 true/false questions
-- 4 short-answer questions
+1. Generate exactly 15 questions TOTAL for the entire module.
+2. Do NOT generate 15 questions for each concept.
+3. Cover the accepted concepts as evenly as reasonably possible.
+4. Every question must have a conceptId matching one of the accepted concepts.
+5. Generate:
+   - 6 multiple choice questions
+   - 5 true/false questions
+   - 4 short-answer questions
+6. Every question must be unique.
+7. Questions should test different aspects of the concepts.
+8. Difficulty must be an integer from 1 to 5.
 
 MCQ:
-- type: "mcq"
+- type = "mcq"
 - exactly 4 choices
 - answer must exactly match one choice
-- difficulty: integer from 1 to 5
 
 TRUE/FALSE:
-- type: "true_false"
-- choices must be ["True", "False"]
-- answer must be "True" or "False"
-- difficulty: integer from 1 to 5
+- type = "true_false"
+- choices = ["True", "False"]
+- answer = "True" or "False"
 
 SHORT ANSWER:
-- type: "short_answer"
-- choices must be null
-- answer should contain the expected answer
-- difficulty: integer from 1 to 5
+- type = "short_answer"
+- choices = null
+- answer contains the expected answer
 
-IMPORTANT:
-- Questions must be unique.
-- Do not repeat questions.
-- Test different aspects of the concepts.
-- Return ONLY JSON.
-- Do not use markdown.
-- Do not write explanations before or after the JSON.
-
-Return exactly this structure:
-
-{
-  "questions": [
-    {
-      "conceptId": 1,
-      "type": "mcq",
-      "text": "Question text",
-      "answer": "Correct answer",
-      "choices": ["A", "B", "C", "D"],
-      "difficulty": 2
-    }
-  ]
-}
-
-The "questions" array must contain exactly 15 objects.
+Do not create questions about concepts that are not listed above.
 `;
 
-  try {
-    // =====================================================
-    // ONE GROQ REQUEST
-    // =====================================================
+    try {
+      // =====================================================
+      // GROQ STRUCTURED OUTPUT
+      // =====================================================
 
-    const completion = await this.groq.chat.completions.create({
-      model: 'openai/gpt-oss-20b',
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      temperature: 0.2,
-    });
-
-    const responseText =
-      completion.choices[0]?.message?.content ?? '';
-
-    const cleanedText = responseText
-      .replace(/```json/g, '')
-      .replace(/```/g, '')
-      .trim();
-
-    if (!cleanedText) {
-      throw new Error('AI returned an empty response');
-    }
-
-    console.log('AI question response:', cleanedText);
-
-    // =====================================================
-    // PARSE JSON
-    // =====================================================
-
-    const parsed = JSON.parse(cleanedText);
-
-    const aiQuestions = parsed.questions;
-
-    if (!Array.isArray(aiQuestions)) {
-      throw new Error(
-        'AI did not return a questions array',
-      );
-    }
-
-    // =====================================================
-    // SAVE AI RUN
-    // =====================================================
-
-    const aiRun = await this.prisma.aiRun.create({
-      data: {
+      const completion = await this.groq.chat.completions.create({
         model: 'openai/gpt-oss-20b',
-        promptVersion: 'question-generator-v5',
-        input: prompt,
-        output: cleanedText,
-      },
-    });
 
-    const acceptedConceptIds = new Set(
-      acceptedConcepts.map((concept) => concept.id),
-    );
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
 
-    const generatedQuestionIds: number[] = [];
-    const seenQuestions = new Set<string>();
+        temperature: 0.2,
 
-    // =====================================================
-    // SAVE QUESTIONS
-    // =====================================================
+        reasoning_effort: 'low',
 
-    for (const q of aiQuestions) {
-      if (
-        !q ||
-        !['mcq', 'true_false', 'short_answer'].includes(q.type)
-      ) {
-        continue;
+        max_completion_tokens: 5000,
+
+        response_format: {
+          type: 'json_schema',
+
+          json_schema: {
+            name: 'module_questions',
+
+            strict: true,
+
+            schema: {
+              type: 'object',
+
+              properties: {
+                questions: {
+                  type: 'array',
+
+                  items: {
+                    type: 'object',
+
+                    properties: {
+                      conceptId: {
+                        type: 'integer',
+                      },
+
+                      type: {
+                        type: 'string',
+                        enum: [
+                          'mcq',
+                          'true_false',
+                          'short_answer',
+                        ],
+                      },
+
+                      text: {
+                        type: 'string',
+                      },
+
+                      answer: {
+                        type: 'string',
+                      },
+
+                      choices: {
+                        type: ['array', 'null'],
+
+                        items: {
+                          type: 'string',
+                        },
+                      },
+
+                      difficulty: {
+                        type: 'integer',
+                        minimum: 1,
+                        maximum: 5,
+                      },
+                    },
+
+                    required: [
+                      'conceptId',
+                      'type',
+                      'text',
+                      'answer',
+                      'choices',
+                      'difficulty',
+                    ],
+
+                    additionalProperties: false,
+                  },
+                },
+              },
+
+              required: ['questions'],
+
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      // =====================================================
+      // READ AI RESPONSE
+      // =====================================================
+
+      const responseText =
+        completion.choices[0]?.message?.content ?? '';
+
+      if (!responseText) {
+        throw new Error('AI returned an empty response');
       }
 
-      if (!q.text || !q.answer) {
-        continue;
-      }
+      console.log('AI returned structured questions');
 
-      const conceptId = Number(q.conceptId);
+      const parsed = JSON.parse(responseText);
 
-      // Make sure concept belongs to this module
-      if (!acceptedConceptIds.has(conceptId)) {
-        continue;
-      }
+      const aiQuestions = parsed.questions;
 
-      // Prevent duplicate questions
-      const normalizedText = String(q.text)
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, ' ');
-
-      if (seenQuestions.has(normalizedText)) {
-        continue;
-      }
-
-      seenQuestions.add(normalizedText);
-
-      let choices: string[] | null = null;
-
-      // ===================================================
-      // MCQ
-      // ===================================================
-
-      if (q.type === 'mcq') {
-        if (
-          !Array.isArray(q.choices) ||
-          q.choices.length !== 4
-        ) {
-          continue;
-        }
-
-        const mcqChoices = q.choices.map((choice: unknown) =>
-          String(choice).trim(),
+      if (!Array.isArray(aiQuestions)) {
+        throw new Error(
+          'AI response does not contain a questions array',
         );
+      }
 
-        if (
-          !mcqChoices.includes(
-            String(q.answer).trim(),
-          )
-        ) {
+      // =====================================================
+      // REQUIRE EXACTLY 15 QUESTIONS
+      // =====================================================
+
+      if (aiQuestions.length !== 15) {
+        throw new Error(
+          `AI returned ${aiQuestions.length} questions instead of exactly 15`,
+        );
+      }
+
+      // =====================================================
+      // VALID CONCEPT IDS
+      // =====================================================
+
+      const acceptedConceptIds = new Set(
+        acceptedConcepts.map((concept) => concept.id),
+      );
+
+      // =====================================================
+      // SAVE AI RUN
+      // =====================================================
+
+      const aiRun = await this.prisma.aiRun.create({
+        data: {
+          model: 'openai/gpt-oss-20b',
+          promptVersion: 'question-generator-v6',
+          input: prompt,
+          output: responseText,
+        },
+      });
+
+      const generatedQuestionIds: number[] = [];
+
+      const seenQuestions = new Set<string>();
+
+      // =====================================================
+      // SAVE QUESTIONS
+      // =====================================================
+
+      for (const q of aiQuestions) {
+        // ---------------------------------------------------
+        // VALIDATE CONCEPT
+        // ---------------------------------------------------
+
+        const conceptId = Number(q.conceptId);
+
+        if (!acceptedConceptIds.has(conceptId)) {
           continue;
         }
 
-        choices = mcqChoices;
-      }
+        // ---------------------------------------------------
+        // VALIDATE QUESTION TEXT
+        // ---------------------------------------------------
 
-      // ===================================================
-      // TRUE / FALSE
-      // ===================================================
-
-      if (q.type === 'true_false') {
-        choices = ['True', 'False'];
-
-        if (
-          !['True', 'False'].includes(
-            String(q.answer).trim(),
-          )
-        ) {
+        if (!q.text?.trim() || !q.answer?.trim()) {
           continue;
         }
+
+        // ---------------------------------------------------
+        // PREVENT DUPLICATES
+        // ---------------------------------------------------
+
+        const normalizedText = String(q.text)
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, ' ');
+
+        if (seenQuestions.has(normalizedText)) {
+          continue;
+        }
+
+        seenQuestions.add(normalizedText);
+
+        // ---------------------------------------------------
+        // VALIDATE CHOICES
+        // ---------------------------------------------------
+
+        let choices: string[] | null = null;
+
+        if (q.type === 'mcq') {
+          if (
+            !Array.isArray(q.choices) ||
+            q.choices.length !== 4
+          ) {
+            continue;
+          }
+
+          const mcqChoices = q.choices.map(
+            (choice: string) => choice.trim(),
+          );
+
+          if (
+            !mcqChoices.includes(
+              String(q.answer).trim(),
+            )
+          ) {
+            continue;
+          }
+
+          choices = mcqChoices;
+        }
+
+        // ---------------------------------------------------
+        // TRUE / FALSE
+        // ---------------------------------------------------
+
+        if (q.type === 'true_false') {
+          choices = ['True', 'False'];
+
+          if (
+            !['True', 'False'].includes(
+              String(q.answer).trim(),
+            )
+          ) {
+            continue;
+          }
+        }
+
+        // ---------------------------------------------------
+        // SHORT ANSWER
+        // ---------------------------------------------------
+
+        if (q.type === 'short_answer') {
+          choices = null;
+        }
+
+        // ---------------------------------------------------
+        // CREATE QUESTION
+        // ---------------------------------------------------
+
+        const question = await this.prisma.question.create({
+          data: {
+            type: q.type,
+            text: String(q.text).trim(),
+            answer: String(q.answer).trim(),
+            choices: choices
+              ? JSON.stringify(choices)
+              : null,
+            difficulty: q.difficulty,
+            status: 'generated',
+            aiRunId: aiRun.id,
+          },
+        });
+
+        // ---------------------------------------------------
+        // LINK QUESTION TO CONCEPT
+        // ---------------------------------------------------
+
+        await this.prisma.questionConcept.create({
+          data: {
+            questionId: question.id,
+            conceptId,
+          },
+        });
+
+        // ---------------------------------------------------
+        // CREATE VERSION
+        // ---------------------------------------------------
+
+        await this.prisma.questionVersion.create({
+          data: {
+            questionId: question.id,
+            version: 1,
+            text: question.text,
+            answer: question.answer,
+            choices: question.choices,
+            difficulty: question.difficulty,
+          },
+        });
+
+        generatedQuestionIds.push(question.id);
       }
 
-      // ===================================================
-      // SHORT ANSWER
-      // ===================================================
+      // =====================================================
+      // FINAL VALIDATION
+      // =====================================================
 
-      if (q.type === 'short_answer') {
-        choices = null;
+      if (generatedQuestionIds.length !== 15) {
+        throw new Error(
+          `Only ${generatedQuestionIds.length} valid questions were saved. Expected 15.`,
+        );
       }
 
-      const difficulty = Math.min(
-        5,
-        Math.max(1, Number(q.difficulty) || 2),
+      // =====================================================
+      // AUDIT LOG
+      // =====================================================
+
+      await this.auditLogService.createLog(
+        userId,
+        'generate',
+        'Question',
+        moduleId,
+        {
+          retiredQuestionIds: oldQuestionIds,
+        },
+        {
+          generatedQuestionIds,
+          questionCount: 15,
+          conceptIds: acceptedConcepts.map(
+            (concept) => concept.id,
+          ),
+        },
       );
 
-      // ===================================================
-      // CREATE QUESTION
-      // ===================================================
+      // =====================================================
+      // RETURN QUESTIONS
+      // =====================================================
 
-      const question = await this.prisma.question.create({
-        data: {
-          type: q.type,
-          text: String(q.text).trim(),
-          answer: String(q.answer).trim(),
-          choices: choices
-            ? JSON.stringify(choices)
-            : null,
-          difficulty,
-          status: 'generated',
-          aiRunId: aiRun.id,
+      return this.prisma.question.findMany({
+        where: {
+          id: {
+            in: generatedQuestionIds,
+          },
+        },
+
+        include: {
+          concepts: {
+            include: {
+              concept: true,
+            },
+          },
+
+          versions: {
+            orderBy: {
+              version: 'desc',
+            },
+          },
+        },
+
+        orderBy: {
+          createdAt: 'desc',
         },
       });
+    } catch (error) {
+      console.log(
+        `Question generation failed for module ${moduleId}`,
+        error,
+      );
 
-      // ===================================================
-      // LINK QUESTION TO CONCEPT
-      // ===================================================
+      if (error instanceof Error) {
+        console.log(
+          'Generation error:',
+          error.message,
+        );
+      }
 
-      await this.prisma.questionConcept.create({
-        data: {
-          questionId: question.id,
-          conceptId,
-        },
-      });
-
-      // ===================================================
-      // CREATE VERSION
-      // ===================================================
-
-      await this.prisma.questionVersion.create({
-        data: {
-          questionId: question.id,
-          version: 1,
-          text: question.text,
-          answer: question.answer,
-          choices: question.choices,
-          difficulty: question.difficulty,
-        },
-      });
-
-      generatedQuestionIds.push(question.id);
-    }
-
-    // =====================================================
-    // MAKE SURE QUESTIONS WERE GENERATED
-    // =====================================================
-
-    if (generatedQuestionIds.length === 0) {
-      throw new Error(
-        'No valid questions were generated by the AI',
+      throw new BadRequestException(
+        error instanceof Error
+          ? error.message
+          : 'Failed to generate questions',
       );
     }
-
-    // =====================================================
-    // AUDIT LOG
-    // =====================================================
-
-    await this.auditLogService.createLog(
-      userId,
-      'generate',
-      'Question',
-      moduleId,
-      {
-        retiredQuestionIds: oldQuestionIds,
-      },
-      {
-        generatedQuestionIds,
-        questionCount: generatedQuestionIds.length,
-        conceptIds: acceptedConcepts.map(
-          (concept) => concept.id,
-        ),
-      },
-    );
-
-    // =====================================================
-    // RETURN QUESTIONS
-    // =====================================================
-
-    return this.prisma.question.findMany({
-      where: {
-        id: {
-          in: generatedQuestionIds,
-        },
-      },
-      include: {
-        concepts: {
-          include: {
-            concept: true,
-          },
-        },
-        versions: {
-          orderBy: {
-            version: 'desc',
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-  } catch (error) {
-    console.log(
-      `Question generation failed for module ${moduleId}`,
-      error,
-    );
-
-    // Keep the real error visible in backend logs
-    if (error instanceof Error) {
-      console.log('Generation error:', error.message);
-    }
-
-    throw new BadRequestException(
-      error instanceof Error
-        ? error.message
-        : 'Failed to generate questions',
-    );
   }
-}
-
   // =========================================================
   // GET QUESTIONS
   // =========================================================
