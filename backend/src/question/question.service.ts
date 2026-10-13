@@ -12,7 +12,7 @@ type RawQuestion = {
   type: string;
   text: string;
   answer: string;
-  choices: string[] | null;
+  choices?: string[];
   difficulty: number;
 };
 
@@ -27,40 +27,47 @@ export class QuestionService {
     this.groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
   }
 
-  private buildSchema(count: number) {
-    return {
-      type: 'json_schema' as const,
-      json_schema: {
-        name: 'batch_questions',
-        strict: true,
-        schema: {
-          type: 'object',
-          properties: {
-            questions: {
-              type: 'array',
-              minItems: count,
-              maxItems: count,
-              items: {
-                type: 'object',
-                properties: {
-                  conceptId: { type: 'integer' },
-                  type: { type: 'string' },
-                  text: { type: 'string' },
-                  answer: { type: 'string' },
-                  choices: { type: ['array', 'null'], items: { type: 'string' } },
-                  difficulty: { type: 'integer', minimum: 1, maximum: 5 },
-                },
-                required: ['conceptId', 'type', 'text', 'answer', 'choices', 'difficulty'],
-                additionalProperties: false,
-              },
+  private buildSchema(type: 'mcq' | 'true_false' | 'short_answer', count: number) {
+  const properties: Record<string, unknown> = {
+    conceptId: { type: 'integer' },
+    type: { type: 'string' },
+    text: { type: 'string' },
+    answer: { type: 'string' },
+    difficulty: { type: 'integer', minimum: 1, maximum: 5 },
+  };
+  const required = ['conceptId', 'type', 'text', 'answer', 'difficulty'];
+
+  if (type === 'mcq') {
+    properties.choices = { type: 'array', items: { type: 'string' } };
+    required.push('choices');
+  }
+
+  return {
+    type: 'json_schema' as const,
+    json_schema: {
+      name: 'batch_questions',
+      strict: true,
+      schema: {
+        type: 'object',
+        properties: {
+          questions: {
+            type: 'array',
+            minItems: count,
+            maxItems: count,
+            items: {
+              type: 'object',
+              properties,
+              required,
+              additionalProperties: false,
             },
           },
-          required: ['questions'],
-          additionalProperties: false,
         },
+        required: ['questions'],
+        additionalProperties: false,
       },
-    };
-  }
+    },
+  };
+}
 
   private async generateBatch(
     type: 'mcq' | 'true_false' | 'short_answer',
@@ -90,7 +97,7 @@ Do not create questions about concepts not listed above.
       temperature: 0.2,
       reasoning_effort: 'low',
       max_completion_tokens: 1800,
-      response_format: this.buildSchema(count),
+      response_format: this.buildSchema(type,count),
     });
 
     const responseText = completion.choices[0]?.message?.content ?? '';
@@ -133,13 +140,6 @@ Do not create questions about concepts not listed above.
       select: { id: true },
     });
     const oldQuestionIds = oldGeneratedQuestions.map((q) => q.id);
-    if (oldQuestionIds.length > 0) {
-      await this.prisma.question.updateMany({
-        where: { id: { in: oldQuestionIds }, status: 'generated' },
-        data: { status: 'retired' },
-      });
-    }
-
     const conceptList = acceptedConcepts
       .map((c) => `Concept ID: ${c.id}\nTitle: ${c.title}\nDefinition: ${c.definition}`)
       .join('\n\n');
@@ -254,6 +254,12 @@ Do not create questions about concepts not listed above.
           return question.id;
         }),
       );
+ if (oldQuestionIds.length > 0) {
+      await this.prisma.question.updateMany({
+        where: { id: { in: oldQuestionIds }, status: 'generated' },
+        data: { status: 'retired' },
+      });
+    }
 
       await this.auditLogService.createLog(
         userId,
