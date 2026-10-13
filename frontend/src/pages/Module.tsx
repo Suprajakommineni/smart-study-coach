@@ -9,6 +9,13 @@ import {
   BookOpen,
 } from "lucide-react";
 import { getModules, createModule } from "../api/moduleapi";
+import CreateDialog from "../layout/CreateDialog";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "../components/ui/card";
 
 type ModuleItem = {
   id: number;
@@ -24,13 +31,7 @@ export default function Module() {
   const [modules, setModules] = useState<ModuleItem[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-
-  const [showForm, setShowForm] = useState(false);
-
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [tags, setTags] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const [error, setError] = useState("");
 
@@ -93,16 +94,14 @@ export default function Module() {
     }
   };
 
-  const handleCreateModule = async () => {
+  const handleCreateModule = async (
+    name: string,
+    description: string,
+    tags: string,
+  ) => {
     if (!subjectId) return;
 
-    if (!name.trim()) {
-      setError("Module name is required.");
-      return;
-    }
-
     try {
-      setCreating(true);
       setError("");
 
       await createModule(
@@ -113,16 +112,9 @@ export default function Module() {
         tags || undefined,
       );
 
-      setName("");
-      setDescription("");
-      setTags("");
-      setShowForm(false);
-
       await reloadModules();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create module");
-    } finally {
-      setCreating(false);
     }
   };
 
@@ -147,88 +139,24 @@ export default function Module() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowForm((current) => !current)}
-          className="flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700"
-        >
-          <Plus size={18} />
-          Add Module
-        </button>
+        <CreateDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          title="Create Module"
+          onSubmit={handleCreateModule}
+          trigger={
+            <span className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700">
+              <Plus size={18} />
+              Add Module
+            </span>
+          }
+        />
       </div>
 
       {/* Error */}
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           {error}
-        </div>
-      )}
-
-      {/* Add Module Form */}
-      {showForm && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Create Module</h2>
-
-          <div className="mt-5 space-y-4">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Module Name
-              </label>
-
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="e.g. Algebra Basics"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Description
-              </label>
-
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                rows={3}
-                placeholder="Module description"
-                className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Tags
-              </label>
-
-              <input
-                value={tags}
-                onChange={(event) => setTags(event.target.value)}
-                placeholder="e.g. basics, equations"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={handleCreateModule}
-                disabled={creating}
-                className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-              >
-                {creating ? "Creating..." : "Create Module"}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -251,7 +179,7 @@ export default function Module() {
 
           <button
             type="button"
-            onClick={() => setShowForm(true)}
+            onClick={() => setDialogOpen(true)}
             className="mt-5 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-700"
           >
             <Plus size={18} />
@@ -261,64 +189,64 @@ export default function Module() {
       ) : (
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {modules.map((module) => (
-            <div
-              key={module.id}
-              className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
-            >
-              {/* Module title */}
-              <div className="flex items-start gap-3">
-                <div className="rounded-xl bg-violet-50 p-3 text-violet-600">
-                  <BookOpen size={20} />
+            <Card key={module.id}>
+              <CardHeader>
+                <div className="flex items-start gap-3">
+                  <div className="rounded-xl bg-violet-50 p-3 text-violet-600">
+                    <BookOpen size={20} />
+                  </div>
+
+                  <div className="min-w-0">
+                    <CardTitle className="truncate text-lg text-gray-900">
+                      {module.name}
+                    </CardTitle>
+
+                    <p className="mt-1 line-clamp-2 text-sm text-gray-500">
+                      {module.description || "No description available."}
+                    </p>
+                  </div>
                 </div>
+              </CardHeader>
 
-                <div className="min-w-0">
-                  <h2 className="truncate text-lg font-semibold text-gray-900">
-                    {module.name}
-                  </h2>
-
-                  <p className="mt-1 line-clamp-2 text-sm text-gray-500">
-                    {module.description || "No description available."}
-                  </p>
-                </div>
-              </div>
-
-              {/* Main action */}
-              <button
-                type="button"
-                onClick={() =>
-                  navigate(
-                    `/workspaces/${workspaceId}/subjects/${subjectId}/modules/${module.id}/sources`,
-                  )
-                }
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-              >
-                <FileText size={17} />
-                Sources
-              </button>
-
-              {/* Question Bank + Session */}
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => navigate(`/modules/${module.id}/questions`)}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-violet-50 px-3 py-2.5 text-sm font-medium text-violet-700 transition hover:bg-violet-100"
-                >
-                  <ListChecks size={17} />
-                  Questions
-                </button>
-
+              <CardContent>
+                {/* Main action */}
                 <button
                   type="button"
                   onClick={() =>
-                    navigate(`/modules/${module.id}/study-session`)
+                    navigate(
+                      `/workspaces/${workspaceId}/subjects/${subjectId}/modules/${module.id}/sources`,
+                    )
                   }
-                  className="flex items-center justify-center gap-2 rounded-xl bg-green-50 px-3 py-2.5 text-sm font-medium text-green-700 transition hover:bg-green-100"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
                 >
-                  <Play size={17} />
-                  Start Session
+                  <FileText size={17} />
+                  Sources
                 </button>
-              </div>
-            </div>
+
+                {/* Question Bank + Session */}
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/modules/${module.id}/questions`)}
+                    className="flex items-center justify-center gap-2 rounded-xl bg-violet-50 px-3 py-2.5 text-sm font-medium text-violet-700 transition hover:bg-violet-100"
+                  >
+                    <ListChecks size={17} />
+                    Questions
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(`/modules/${module.id}/study-session`)
+                    }
+                    className="flex items-center justify-center gap-2 rounded-xl bg-green-50 px-3 py-2.5 text-sm font-medium text-green-700 transition hover:bg-green-100"
+                  >
+                    <Play size={17} />
+                    Start Session
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}

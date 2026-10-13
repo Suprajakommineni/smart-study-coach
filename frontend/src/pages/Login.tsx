@@ -38,9 +38,9 @@ export default function Login() {
       const message =
         err instanceof Error ? err.message : "Something went wrong";
       setError({
-        email: message.toLowerCase().includes("credentials")
-          ? "Invalid Credentials"
-          : "",
+        email: message.toLowerCase().includes("email")
+          ? "Invalid Mail"
+          : message,
         password: message.toLowerCase().includes("password")
           ? "Invalid Password"
           : "",

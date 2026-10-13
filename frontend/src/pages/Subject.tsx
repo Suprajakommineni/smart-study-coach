@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Plus, BookOpen } from "lucide-react";
 import { getSubjects, createSubject } from "../api/subjectapi";
+import CreateDialog from "../layout/CreateDialog";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from "../components/ui/card";
 
 type SubjectItem = {
   id: number;
@@ -16,14 +23,7 @@ export default function Subject() {
 
   const [subjects, setSubjects] = useState<SubjectItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-
-  const [showForm, setShowForm] = useState(false);
-
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [tags, setTags] = useState("");
-
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState("");
 
   const id = Number(workspaceId);
@@ -88,16 +88,14 @@ export default function Subject() {
     };
   }, [workspaceId, id]);
 
-  const handleCreate = async () => {
+  const handleCreate = async (
+    name: string,
+    description: string,
+    tags: string,
+  ) => {
     if (!workspaceId) return;
 
-    if (!name.trim()) {
-      setError("Subject name is required.");
-      return;
-    }
-
     try {
-      setCreating(true);
       setError("");
 
       await createSubject(
@@ -107,16 +105,9 @@ export default function Subject() {
         tags || undefined,
       );
 
-      setName("");
-      setDescription("");
-      setTags("");
-      setShowForm(false);
-
       await loadSubjects();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create subject");
-    } finally {
-      setCreating(false);
     }
   };
 
@@ -141,90 +132,24 @@ export default function Subject() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowForm((current) => !current)}
-          className="flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700"
-        >
-          <Plus size={18} />
-          Add Subject
-        </button>
+        <CreateDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          title="Create Subject"
+          onSubmit={handleCreate}
+          trigger={
+            <span className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-violet-700">
+              <Plus size={18} />
+              Add Subject
+            </span>
+          }
+        />
       </div>
 
       {/* Error */}
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           {error}
-        </div>
-      )}
-
-      {/* Add Subject */}
-      {showForm && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Create Subject
-          </h2>
-
-          <div className="mt-5 grid gap-4">
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Subject Name
-              </label>
-
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="e.g. Mathematics"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Description
-              </label>
-
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                rows={3}
-                placeholder="Subject description"
-                className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Tags
-              </label>
-
-              <input
-                value={tags}
-                onChange={(event) => setTags(event.target.value)}
-                placeholder="e.g. algebra, basics"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none transition focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={handleCreate}
-                disabled={creating}
-                className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50"
-              >
-                {creating ? "Creating..." : "Create Subject"}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -248,34 +173,37 @@ export default function Subject() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {subjects.map((subject) => (
-            <button
+            <Card
               key={subject.id}
-              type="button"
+              className="cursor-pointer transition hover:-translate-y-0.5 hover:shadow-lg"
               onClick={() =>
                 navigate(
                   `/workspaces/${workspaceId}/subjects/${subject.id}/modules`,
                 )
               }
-              className="rounded-2xl border border-gray-200 bg-white p-6 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-md"
             >
-              <div className="flex items-start justify-between">
-                <div className="rounded-xl bg-violet-50 p-3 text-violet-600">
-                  <BookOpen size={20} />
+              <CardHeader>
+                <div className="flex items-start gap-3">
+                  <div className="rounded-xl bg-violet-50 p-3 text-violet-600">
+                    <BookOpen size={20} />
+                  </div>
+
+                  <CardTitle className="text-lg text-gray-900">
+                    {subject.name}
+                  </CardTitle>
                 </div>
-              </div>
+              </CardHeader>
 
-              <h2 className="mt-5 text-lg font-semibold text-gray-900">
-                {subject.name}
-              </h2>
+              <CardContent>
+                <p className="line-clamp-2 text-sm text-gray-500">
+                  {subject.description || "No description available."}
+                </p>
 
-              <p className="mt-2 line-clamp-2 text-sm text-gray-500">
-                {subject.description || "No description available."}
-              </p>
-
-              <div className="mt-5 text-sm font-medium text-violet-600">
-                Open Modules →
-              </div>
-            </button>
+                <div className="mt-5 text-sm font-medium text-violet-600">
+                  Open Modules →
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}

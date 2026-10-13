@@ -18,7 +18,6 @@ import {
 type Source = {
   id: number;
   text: string;
-  sourceType: string;
   status: string;
   version: number;
   createdAt?: string;
@@ -39,7 +38,6 @@ export default function Sources() {
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const [text, setText] = useState("");
-  const [sourceType, setSourceType] = useState("paste");
 
   const [error, setError] = useState("");
 
@@ -97,7 +95,6 @@ export default function Sources() {
 
   const resetForm = () => {
     setText("");
-    setSourceType("paste");
     setEditingId(null);
     setShowForm(false);
   };
@@ -153,7 +150,6 @@ export default function Sources() {
   const openEditForm = (source: Source) => {
     setEditingId(source.id);
     setText(source.text);
-    setSourceType(source.sourceType);
     setShowForm(true);
     setError("");
   };
@@ -243,13 +239,7 @@ export default function Sources() {
                 Source Type
               </label>
 
-              <select
-                value={sourceType}
-                onChange={(event) => setSourceType(event.target.value)}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
-              >
-                <option value="paste">Paste Text</option>
-              </select>
+          <span>Paste</span>
             </div>
 
             <div>
@@ -259,7 +249,7 @@ export default function Sources() {
 
               <textarea
                 value={text}
-                onChange={(event) => setText(event.target.value)}
+                onChange={(e) => setText(e.target.value)}
                 rows={8}
                 placeholder="Paste your learning material here..."
                 className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
@@ -340,10 +330,7 @@ export default function Sources() {
 
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-                        {source.sourceType}
-                      </span>
-
+        
                       <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600">
                         Version {source.version}
                       </span>

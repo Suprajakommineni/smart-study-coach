@@ -96,7 +96,9 @@ export default function CreateDialog({
         <div className="flex justify-end gap-3">
           <Button onClick={handleSubmit}>Create</Button>
 
-          <Button onClick={() => onOpenChange(false)} variant="outline">
+          <Button onClick={() => {onOpenChange(false);setName("");
+    setDescription("");
+    setTags(""); }} variant="outline">
             Cancel
           </Button>
         </div>

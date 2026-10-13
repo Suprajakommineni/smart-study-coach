@@ -173,11 +173,10 @@ export default function QuestionBank() {
 
   return (
     <div className="space-y-6">
-      {/* HEADER */}
 
       {/* HEADER */}
+    <div className="space-y-4">
 
-<div className="space-y-4">
   <button
     type="button"
     onClick={() => navigate(-1)}

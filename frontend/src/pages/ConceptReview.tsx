@@ -225,7 +225,7 @@ const ConceptReview = () => {
       {!loading && !error && concepts.length === 0 && (
         <div className="rounded-xl border bg-white p-8 text-center">
           <p className="text-sm text-gray-500">
-            No concepts yet — process this source to generate some.
+            No concepts yet — process the source to generate some.
           </p>
         </div>
       )}

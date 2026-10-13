@@ -56,7 +56,11 @@ const WorkSpace = () => {
     description: string,
     tags: string,
   ) => {
+    try{
     await createWorkSpace(name, description, tags);
+    } catch(err) {
+      setError(err instanceof Error ? err.message : "Failed to create workspace" )
+    }
 
     await loadData();
   };
