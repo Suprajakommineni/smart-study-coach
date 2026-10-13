@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
-import Groq from 'groq-sdk';
+import { Groq } from 'groq-sdk';
 
 type RawQuestion = {
   conceptId: number;
