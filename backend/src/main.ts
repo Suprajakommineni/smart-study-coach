@@ -3,7 +3,7 @@ import { AppModule } from './app.module.js';
 
 const allowedOrigins = [
   'http://localhost:5173',
-  'https://smart-study-coach-5ll2.vercel.app',
+'https://smart-study-coach-frontend-lovat.vercel.app',
 ];
 
 async function bootstrap() {
