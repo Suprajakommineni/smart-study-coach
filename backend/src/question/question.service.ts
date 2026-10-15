@@ -349,6 +349,9 @@ Do not create questions about concepts not listed above.
     if (!data.answer.trim()) {
       throw new BadRequestException('Expected answer is required');
     }
+    if(!data.choices?.map((c) => c.trim().toLowerCase !== String)) {
+      throw new BadRequestException('Expected choice is required');
+    }
 
     const question = await this.prisma.question.findFirst({
       where: {

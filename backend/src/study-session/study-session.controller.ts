@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { StudySessionService } from './study-session.service.js';
+
 @Controller('study-sessions')
 @UseGuards(AuthGuard('jwt'))
 export class StudySessionController {

@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { Groq } from 'groq-sdk';
+import { MasteryService } from '../mastery/mastery.service.js';
 
 type QuestionType = 'mcq' | 'true_false' | 'short_answer';
 
@@ -16,6 +17,7 @@ export class StudySessionService {
   constructor(
     private prisma: PrismaService,
     private auditLogService: AuditLogService,
+    private masteryService: MasteryService
   ) {
     this.groq = new Groq({
       apiKey: process.env.GROQ_API_KEY,
@@ -644,7 +646,7 @@ export class StudySessionService {
         .map((item) => item.conceptId);
 
       for (const conceptId of conceptIds) {
-        await this.recalculateMastery(tx, conceptId);
+        await this.masteryService.recalculateMastery(conceptId, tx);
       }
 
       return attempt;
@@ -849,7 +851,7 @@ Rules:
         .map((item) => item.conceptId);
 
       for (const conceptId of conceptIds) {
-        await this.recalculateMastery(tx, conceptId);
+        await this.masteryService.recalculateMastery(conceptId, tx);
       }
 
       return updated;
@@ -974,142 +976,7 @@ Rules:
     };
   }
 
-  // =========================================================
-  // MASTERY
-  // =========================================================
-
-  private async recalculateMastery(tx: any, conceptId: number) {
-    const attempts = await tx.attempt.findMany({
-      where: {
-        question: {
-          concepts: {
-            some: {
-              conceptId,
-            },
-          },
-        },
-      },
-
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
-
-    let score = 0;
-
-    let correctStreak = 0;
-
-    let incorrectStreak = 0;
-
-    for (const attempt of attempts) {
-      const result = attempt.userOverride || attempt.result;
-
-      const daysSinceAttempt = Math.max(
-        0,
-        (Date.now() - new Date(attempt.createdAt).getTime()) /
-          (1000 * 60 * 60 * 24),
-      );
-
-      const recencyWeight =
-        daysSinceAttempt <= 1
-          ? 1
-          : daysSinceAttempt <= 7
-            ? 0.8
-            : daysSinceAttempt <= 30
-              ? 0.5
-              : 0.3;
-
-      if (result === 'correct') {
-        score += 10 * recencyWeight;
-
-        correctStreak += 1;
-
-        incorrectStreak = 0;
-      } else if (result === 'partial') {
-        score += 5 * recencyWeight;
-
-        correctStreak = 0;
-
-        incorrectStreak = 0;
-      } else {
-        score -= 15 * recencyWeight;
-
-        correctStreak = 0;
-
-        incorrectStreak += 1;
-      }
-
-      score = Math.max(0, Math.min(100, score));
-    }
-
-    const lastAttempt =
-      attempts.length > 0 ? attempts[attempts.length - 1] : null;
-
-    const lastStudiedAt = lastAttempt?.createdAt ?? null;
-
-    let bucket: string;
-
-    if (score < 25) {
-      bucket = 'New';
-    } else if (score < 50) {
-      bucket = 'Learning';
-    } else if (score < 75) {
-      bucket = 'Proficient';
-    } else {
-      bucket = 'Mastered';
-    }
-
-    let reviewInterval: number;
-
-    if (incorrectStreak >= 2 || score < 25) {
-      reviewInterval = 1;
-    } else if (score < 50) {
-      reviewInterval = 2;
-    } else if (score < 75) {
-      reviewInterval = 4;
-    } else if (correctStreak >= 3) {
-      reviewInterval = 7;
-    } else {
-      reviewInterval = 5;
-    }
-
-    const nextReviewAt = lastStudiedAt
-      ? new Date(
-          new Date(lastStudiedAt).getTime() +
-            reviewInterval * 24 * 60 * 60 * 1000,
-        )
-      : null;
-
-    const mastery = await tx.mastery.upsert({
-      where: {
-        conceptId,
-      },
-
-      create: {
-        conceptId,
-        score,
-        bucket,
-        lastStudiedAt,
-        nextReviewAt,
-        reviewInterval,
-        correctStreak,
-        incorrectStreak,
-      },
-
-      update: {
-        score,
-        bucket,
-        lastStudiedAt,
-        nextReviewAt,
-        reviewInterval,
-        correctStreak,
-        incorrectStreak,
-      },
-    });
-
-    return mastery;
-  }
-
+  
   // =========================================================
   // HELPERS
   // =========================================================

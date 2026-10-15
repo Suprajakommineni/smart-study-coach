@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { MasteryService } from '../mastery/mastery.service.js';
@@ -95,75 +95,74 @@ export class ConceptService {
     );
     return updatedConcept;
   }
-
-  async merge(keepId: number, mergeId: number, userId: number) {
-    if (keepId === mergeId)
-      throw new Error('A concept cannot be merged with itself');
-
-    const existing = await this.getOwnedConcept(keepId, userId);
-    const merging = await this.getOwnedConcept(mergeId, userId);
-
-    const existingFacts = JSON.parse(existing.facts);
-    const mergingFacts = JSON.parse(merging.facts);
-    const combinedFacts = [...existingFacts, ...mergingFacts];
-
-    const questions = await this.prisma.questionConcept.findMany({
-      where: { conceptId: mergeId },
-    });
-
-    for (const question of questions) {
-      await this.prisma.questionConcept.upsert({
-        where: {
-          questionId_conceptId: {
-            questionId: question.questionId,
-            conceptId: keepId,
-          },
-        },
-        update: {},
-        create: { questionId: question.questionId, conceptId: keepId },
-      });
-      await this.prisma.questionConcept.delete({
-        where: {
-          questionId_conceptId: {
-            questionId: question.questionId,
-            conceptId: mergeId,
-          },
-        },
-      });
-    }
-
-    const finalConcept = await this.prisma.concept.update({
-      where: { id: keepId },
-      data: { facts: JSON.stringify(combinedFacts), status: 'edited' },
-    });
-
-    const mergedConcept = await this.prisma.concept.update({
-      where: { id: mergeId },
-      data: { status: 'merged' },
-    });
-
-    await this.prisma.mastery.deleteMany({ where: { conceptId: mergeId } });
-
-    const existingMastery = await this.prisma.mastery.findUnique({
-      where: { conceptId: keepId },
-    });
-    if (!existingMastery) {
-      await this.prisma.mastery.create({
-        data: { conceptId: keepId, score: 0, bucket: 'New' },
-      });
-    }
-
-    await this.masteryService.recalculateMastery(keepId);
-
-    await this.auditLogService.createLog(
-      userId,
-      'merge',
-      'Concept',
-      keepId,
-      { keptConcept: existing, mergedConcept: merging },
-      { finalConcept, mergedConcept },
-    );
-
-    return finalConcept;
+async merge(keepId: number, mergeId: number, userId: number) {
+  if (keepId === mergeId) {
+    throw new BadRequestException('A concept cannot be merged with itself');
   }
+
+  const existing = await this.getOwnedConcept(keepId, userId);
+  const merging = await this.getOwnedConcept(mergeId, userId);
+
+  const combinedFacts = [
+    ...JSON.parse(existing.facts),
+    ...JSON.parse(merging.facts),
+  ];
+
+  const { finalConcept, mergedConcept } = await this.prisma.$transaction(
+    async (tx) => {
+      const links = await tx.questionConcept.findMany({
+        where: { conceptId: mergeId },
+      });
+
+      for (const link of links) {
+        await tx.questionConcept.upsert({
+          where: {
+            questionId_conceptId: {
+              questionId: link.questionId,
+              conceptId: keepId,
+            },
+          },
+          update: {},
+          create: { questionId: link.questionId, conceptId: keepId },
+        });
+
+        await tx.questionConcept.delete({
+          where: {
+            questionId_conceptId: {
+              questionId: link.questionId,
+              conceptId: mergeId,
+            },
+          },
+        });
+      }
+
+      const kept = await tx.concept.update({
+        where: { id: keepId },
+        data: { facts: JSON.stringify(combinedFacts), status: 'edited' },
+      });
+
+      const merged = await tx.concept.update({
+        where: { id: mergeId },
+        data: { status: 'merged' },
+      });
+
+      await tx.mastery.deleteMany({ where: { conceptId: mergeId } });
+
+      await this.masteryService.recalculateMastery(keepId, tx);
+
+      return { finalConcept: kept, mergedConcept: merged };
+    },
+  );
+
+  await this.auditLogService.createLog(
+    userId,
+    'merge',
+    'Concept',
+    keepId,
+    { keptConcept: existing, mergedConcept: merging },
+    { finalConcept, mergedConcept },
+  );
+
+  return finalConcept;
+}
 }

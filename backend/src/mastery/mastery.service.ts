@@ -1,13 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { AuditLogService } from '../audit-log/audit-log.service.js';
 
 @Injectable()
 export class MasteryService {
-  constructor(
-    private prisma: PrismaService,
-    private auditLogService: AuditLogService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   // =========================================================
   // RECENCY WEIGHT
@@ -165,158 +162,44 @@ export class MasteryService {
   }
 
   // =========================================================
-  // UPDATE MASTERY
-  // =========================================================
-
-  async updateMastery(attemptId: number, masteryId: number) {
-    const attempt = await this.prisma.attempt.findUnique({
-      where: {
-        id: attemptId,
-      },
-    });
-
-    if (!attempt) {
-      throw new Error('Attempt not found');
-    }
-
-    const mastery = await this.prisma.mastery.findUnique({
-      where: {
-        id: masteryId,
-      },
-    });
-
-    if (!mastery) {
-      throw new Error('Mastery record not found');
-    }
-
-    const beforeMastery = mastery;
-
-    const weight = this.getRecencyWeight(attempt.createdAt);
-
-    let newScore = mastery.score;
-
-    let correctStreak = mastery.correctStreak;
-    let incorrectStreak = mastery.incorrectStreak;
-
-    if (attempt.result === 'correct') {
-      newScore += 10 * weight;
-
-      correctStreak += 1;
-      incorrectStreak = 0;
-    }
-
-    if (attempt.result === 'incorrect') {
-      newScore -= 15 * weight;
-
-      incorrectStreak += 1;
-      correctStreak = 0;
-    }
-
-    if (attempt.result === 'partial') {
-      newScore += 5 * weight;
-
-      correctStreak = 0;
-      incorrectStreak = 0;
-    }
-
-    newScore = Math.max(0, Math.min(100, newScore));
-
-    const bucket = this.getBucket(newScore);
-
-    const reviewInterval = this.getReviewInterval(
-      newScore,
-      correctStreak,
-      incorrectStreak,
-    );
-
-    const lastStudiedAt = new Date();
-
-    const nextReviewAt = new Date();
-
-    nextReviewAt.setDate(nextReviewAt.getDate() + reviewInterval);
-
-    const updatedMastery = await this.prisma.mastery.update({
-      where: {
-        id: masteryId,
-      },
-
-      data: {
-        score: newScore,
-        bucket,
-        correctStreak,
-        incorrectStreak,
-        reviewInterval,
-        lastStudiedAt,
-        nextReviewAt,
-      },
-    });
-
-    await this.auditLogService.createLog(
-      null,
-      'mastery_recalculated',
-      'Mastery',
-      masteryId,
-      beforeMastery,
-      updatedMastery,
-    );
-
-    return updatedMastery;
-  }
-
-  // =========================================================
   // RECALCULATE MASTERY
+  // Works inside a transaction (pass tx) or on its own.
   // =========================================================
 
-  async recalculateMastery(conceptId: number) {
-    const mastery = await this.prisma.mastery.findUnique({
-      where: {
-        conceptId,
-      },
-    });
+  async recalculateMastery(conceptId: number, tx?: Prisma.TransactionClient) {
+    const db = tx ?? this.prisma;
 
-    if (!mastery) {
-      throw new Error('Mastery record not found');
-    }
-
-    const attempts = await this.prisma.attempt.findMany({
+    const attempts = await db.attempt.findMany({
       where: {
         question: {
           concepts: {
-            some: {
-              conceptId,
-            },
+            some: { conceptId },
           },
         },
       },
-
-      orderBy: {
-        createdAt: 'asc',
-      },
+      orderBy: { createdAt: 'asc' },
     });
 
     let score = 0;
-
     let correctStreak = 0;
     let incorrectStreak = 0;
 
     for (const attempt of attempts) {
+      const result = attempt.userOverride || attempt.result;
       const weight = this.getRecencyWeight(attempt.createdAt);
 
-      if (attempt.result === 'correct') {
+      if (result === 'correct') {
         score += 10 * weight;
-
         correctStreak += 1;
         incorrectStreak = 0;
-      } else if (attempt.result === 'incorrect') {
-        score -= 15 * weight;
-
-        incorrectStreak += 1;
-        correctStreak = 0;
-      } else if (attempt.result === 'partial') {
+      } else if (result === 'partial') {
         score += 5 * weight;
-
         correctStreak = 0;
         incorrectStreak = 0;
+      } else {
+        score -= 15 * weight;
+        incorrectStreak += 1;
+        correctStreak = 0;
       }
 
       score = Math.max(0, Math.min(100, score));
@@ -331,21 +214,25 @@ export class MasteryService {
     );
 
     const lastAttempt = attempts[attempts.length - 1];
-
     const lastStudiedAt = lastAttempt?.createdAt ?? null;
 
     const nextReviewAt = lastStudiedAt
       ? new Date(lastStudiedAt.getTime() + reviewInterval * 24 * 60 * 60 * 1000)
       : null;
 
-    const beforeMastery = mastery;
-
-    const updatedMastery = await this.prisma.mastery.update({
-      where: {
+    return db.mastery.upsert({
+      where: { conceptId },
+      create: {
         conceptId,
+        score,
+        bucket,
+        correctStreak,
+        incorrectStreak,
+        reviewInterval,
+        lastStudiedAt,
+        nextReviewAt,
       },
-
-      data: {
+      update: {
         score,
         bucket,
         correctStreak,
@@ -355,17 +242,6 @@ export class MasteryService {
         nextReviewAt,
       },
     });
-
-    await this.auditLogService.createLog(
-      null,
-      'mastery_recalculated',
-      'Mastery',
-      mastery.id,
-      beforeMastery,
-      updatedMastery,
-    );
-
-    return updatedMastery;
   }
 
   // =========================================================
